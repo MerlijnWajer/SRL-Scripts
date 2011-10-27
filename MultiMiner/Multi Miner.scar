@@ -1,0 +1,1045 @@
+program MultiMiner;
+
+//{$DEFINE MiddleWithNewRock}
+
+{TODO:
+
+-SetRockColor, more accurate/not random?.
+}
+
+
+
+{.include SRL/SRL/Misc/Smart.scar}
+{.include SRL/SRL.scar}
+{.include SRL/SRL/Skill/Mining.scar}
+{.include SRL/SRL/Misc/Path.scar}
+{.include SRL/SRL/Misc/NewAutoColor.scar}
+
+Const
+   StartPlayer = 0;
+   MinutesPerLoad = 20;  // Max minutes per load.
+   NumberOfUsers = 1;    // How many players are you using?
+   YourSRLID  = '';     // Must be a string!
+   YourSRLPass =  ''; // Must be a string!
+   VersionNumber = '0.04';
+   RemoteControlMasterNickName = '';
+   VEMLoads = 4;
+   LSMLoads = 2;
+   PMLoads = 10;
+
+   WizzyDebug = True;
+   
+Type
+   TLocalVar = Record
+     Value: Variant;
+     IsSet: Boolean;
+     Name, vType: String;
+   End;
+   TLocals = Array Of TLocalVar;
+   
+   TMineInfo = Record
+     HasNewRocks: Boolean;
+     GasCheck: Function (P: TPoint): Boolean;
+     {$IFDEF MiddleWithNewRock}
+       IsNewRock: Function (Var P: TPoint): Boolean;
+     {$ELSE}
+       IsNewRock: Function (P: TPoint): Boolean;
+     {$ENDIF}
+     Ores: TStringArray;
+     MMRockName, RunDir: String;
+     MineDist: Integer;
+   End;
+
+   TFunctionBArray = Array Of Function: Boolean;
+
+   tExtraFunc = Record
+     Func: TFunctionBArray;
+     PointInScript: Integer;
+   End;
+
+   TExtraFuncArray = Array Of tExtraFunc;
+   
+   myReport = Record
+     Bmp, Value: Integer;
+     Name, wType: String;
+   End;
+   TReportArray = Array [0..19] Of myReport;
+
+   TLocation = Record
+     Name: String;
+     ToMine, ToBank, SetOreColor, Start, Stop: Procedure;
+     OpenBank: Function: Boolean;
+     AutoColorOptions: Array Of String;
+     MineInfo: TMineInfo;
+     LocalVars: TLocals;
+     Loads, TimeRan, WorkedTimer: Integer;
+     Report: TReportArray;
+     Funcs: TExtraFuncArray;
+   End;
+   { To be extended with total ores mined for each location,
+     so I can add a more accurate ores p/h for each ore. }
+
+   TLocationArray = Array Of TLocation;
+
+
+Const
+   {Constants for the TExtraFuncArray}
+   LOC_BANK = 0;
+   LOC_ATMINE = 1;
+   LOC_MINING = 2;
+   LOC_DONEMINING = 3;
+   LOC_AFTERFIGHT = 4;
+
+Var
+  MyTimer, OreMask, Dx, Dy, Gasses: Integer;
+
+  NormalRandomsTime, FindTalkTime: LongInt;
+  CurRock: String;
+  NewAutoColorWorked: Boolean;
+
+  {Global 'Locations' array, CurrentLocation, and ReportArray}
+
+
+  Locations: TLocationArray;
+  {This array contains all the info about the locations,
+  all the Procedure/Function Pointers, Script variables and setup.}
+  CurrentLocation: TLocation;
+   {
+     CurrentLocation is up for removal, using an location index would be much
+     better:
+     Locations[StrToIndex(Players[CurrentPlayer].Strings[3])]
+   }
+  ReportArray: TReportArray;
+  {Global report array, this as where I keep track
+  of all the ores mined and their bitmaps.}
+
+{.include Mining.scar}
+
+{--------------------------------------------------------
+      Setup Player Names, Passes and NickNames here.
+--------------------------------------------------------}
+
+Procedure DeclarePlayers;
+
+Begin
+  NumberOfPlayers( NumberOfUsers );
+  CurrentPlayer := StartPlayer;
+
+  Players[0].Name :='';
+  Players[0].Pass :='';
+  Players[0].Nick :='';
+  Players[0].Active:=True;
+  Players[0].Loc := 'Mine';
+  Players[0].Strings[0]  := 'Iron';
+  Players[0].Strings[1]  := 'Iron';
+  Players[0].Strings[2]  := 'Iron';
+  Players[0].Booleans[0]  := True;       // Is The Pick Equipped?
+  Players[0].Booleans[1] := True; // False for brightness Check Once.
+  Players[0].Strings[3]  := 'PMVEM';     // 'VEM', 'LSM', PMRMM, PMVEM
+
+  Writeln( IntToStr ( HowManyPlayers ) + ' Players' );
+  SetPlayerNameTPAs;
+End;
+
+{--------------------------------------------------------
+              Declare required bitmaps.
+--------------------------------------------------------}
+
+Procedure Global_Bitmaps;
+
+Begin
+  OreMask := BitmapFromString(11, 11, 'z78DA73730301033070436' +
+  '2238B60024C35B84CC0A5923C13F0BB937813F0EB22DE04CC5022' +
+  'CF04CADD404CC890EA0BFCE2F85D4E4C6A212FF470998FCC0600F' +
+  'B599CC1');
+End;
+
+Function w_GetWaterColor: Integer;
+
+Var
+   x, y, z: Integer;
+
+Begin
+  Result := -1;
+  z := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  If FindColoredAreaTolerance(x, y, 12161662, MMX1, MMY1, MMX2, MMY2, 10, 25) Then
+    Result := GetColor(x, y)
+  Else
+  Begin
+    WriteLn('Could not find water Color.');
+    ColorToleranceSpeed(z);
+    TerminateScript;
+  End;
+  ColorToleranceSpeed(z);
+End;
+
+Function InStringArray(S: String; SA: TStringArray; L: Boolean): Boolean;
+  // Just after I wrote this function I saw the InStrArr function in scar...
+Var
+   I: Integer;
+Begin
+  Result := True;
+  If L Then
+    S := LowerCase(S);
+  For I := 0 To High(SA) Do
+    If L Then
+    Begin
+      If S = LowerCase(SA[I]) Then
+        Exit;
+    End
+    Else
+      If S = SA[I] Then
+        Exit;
+  Result := False;
+End;
+
+Procedure Location_Debug(S: String);
+  // Writeln, but adds Location name and Currently active player name
+Begin
+  WriteLn(Players[CurrentPlayer].Name + ' - ' + CurrentLocation.Name + ': ' + S);
+End;
+
+Function FindNormalRandomsTimeEx: Boolean;
+
+Var
+  TempTime, Time1: LongInt;
+
+Begin
+  TempTime := GetSystemTime;
+  
+  If TempTime - NormalRandomsTime > 6000 Then
+  Begin
+    NormalRandomsTime := GetSystemTime;
+    Time1 := GetSystemTime;
+    Result := FindNormalRandoms;
+    Status('Calling FNRandoms; Took '+IntToStr(GetSystemTime-Time1)+'.');
+    Exit;
+  End;
+
+  If TempTime - FindTalkTime > 500 Then
+  Begin
+    FindTalkTime := GetSystemTime;
+    Time1 := GetSystemTime;
+    Result := FindTalk;
+    Status('Calling FT; Took '+IntToStr(GetSystemTime-Time1)+'.');
+    Exit;
+  End;
+End;
+
+Function MiddleOfMine(Var x, y: Integer): Boolean;
+  {
+    Average point of all the rockcolors found.
+    The RockColor is taken directly from newAutoColor.scar,
+    using a color name (string) from the Location array.
+    Locations[].MineInfo.MMRockName
+  }
+Var
+   Rocks: TPointArray;
+   TP: TPoint;
+
+Begin
+  FindColorsTolerance(Rocks, srl_AutoGetColor(CurrentLocation.MineInfo.MMRockName), MMX1, MMY1, MMX2, MMY2, 0);
+  Result := (Length(Rocks) > 0);
+  If Result Then
+    TP := MiddleTPA(Rocks);
+  x := TP.X;
+  y := TP.Y;
+End;
+
+Function TooFar: Boolean;
+   // Function AND name by Raymond. ;-)
+Var
+   Rocks: TPointArray;
+   TP: TPoint;
+
+Begin
+  Result := False;
+  FindColorsTolerance(Rocks, srl_AutoGetColor(CurrentLocation.MineInfo.MMRockName), MMX1, MMY1, MMX2, MMY2, 0);
+  if Length(Rocks) > 0 then
+  begin
+    TP := MiddleTPA(Rocks);
+    Result := Distance(643,84,TP.x,Tp.y) > CurrentLocation.MineInfo.MineDist;
+  end;
+End;
+
+Function LoadReport: TReportArray;
+  {
+    This returns a reportarray, used in Bank; For a Temp ReportArray, and
+    used to initialize the Global ReportArray.
+  }
+Var
+   S: TStringArray;
+   B: TIntegerArray;
+   I: Integer;
+Begin
+  S := ['Tin', 'Copper', 'Iron', 'Coal', 'Mithril', 'Adamant', 'Gold', 'Silver', 'Clay'];
+  B := [bmp_Ore_Tin, bmp_Ore_Copper, bmp_Ore_Iron, bmp_Ore_Coal,
+        bmp_Ore_Mithril, bmp_Ore_Adamant, bmp_Ore_Gold, bmp_Ore_Silver,
+        bmp_Ore_Clay];
+  For I := 0 To High(S) Do
+  Begin
+    Result[I].Name := S[I];
+    Result[I].Bmp := B[I];
+    Result[I].Value := 0;
+  End;
+End;
+
+Function ExtraFuncs(Current: Integer): Array Of Boolean;
+   {
+     This Function calls all the 'Extra' function's in the Locations array
+     with the given 'Current: Integer'-Position in the main loop:
+     
+     LOC_BANK, LOC_ATMINE, LOC_MINING and LOC_DONEMINING.
+     
+   }
+Var
+  I , C: Integer;
+Begin
+  SetLength(Result, 0);
+  For I := 0 To High(CurrentLocation.Funcs) Do
+    If Current = CurrentLocation.Funcs[I].PointInScript Then
+    Begin
+      SetLength(Result, Length(CurrentLocation.Funcs[I].Func));
+      For C := 0 To High(CurrentLocation.Funcs[I].Func) Do
+        CurrentLocation.Funcs[I].Func[C]();
+      Exit;
+    End;
+End;
+
+Function MyMine: Boolean;
+   {
+     This is my 'universal' mining prodedure, it uses not so
+     universal rock finding. (see Mining.scar)
+   }
+Var
+   rocks: TPointArray;
+   i, time: integer;
+   rock: tpoint;
+
+begin
+  Try
+    CurrentLocation.SetOreColor();
+  Except End;
+  FindNormalRandoms;
+  Result := False;
+  
+  Begin
+    Rocks := FindRocks(CurRock);
+    For I := 0 To high(rocks) Do
+    Begin
+      Rock := Rocks[I];
+      If CurrentLocation.MineInfo.HasNewRocks Then
+        If Not CurrentLocation.MineInfo.IsNewRock(Rocks[I]) Then
+          Continue;
+      If CurrentLocation.MineInfo.GasCheck(Rocks[I]) Then
+      Begin
+        Continue;
+        TakeScreen('Gas Found');
+      End;
+      MMouse(rock.x, rock.y, 5, 5);
+      GetMousePos(Rock.X, Rock.Y);
+      Wait(RandomRange(100, 150));
+      Result := IsUptext('ine');
+      If Result Then
+        Break;
+    End;
+    
+    If Not Result Then
+      Exit;
+    Mouse(rock.x, rock.y, 0, 0, True);
+
+    Time := GetSystemTime;
+    Repeat
+      Wait(150);
+      FindTalk;
+      If getsystemtime - time > 3000 Then
+      Begin
+        If CurrentLocation.MineInfo.GasCheck(Rocks[I]) Then
+        Begin { Gas checking works just fine... I experience slight problems
+               with the actual stopping of the mining, sometimes
+               a minimap click is not enough to make a rs char stop mining. }
+          TakeScreen('Gas Found');
+          Gasses := Gasses + 1;
+          Mouse(MSCX, MSCY, 4, 4, True);
+          //Mouse(MMCX, MMCY, 2, 2, True);
+          FTWait(4);
+          Exit;
+        End;
+        Wait(150);
+        FindNormalRandomsTimeEx;
+        Wait(150);
+        If FindFight Then
+        Begin
+          RunTo(CurrentLocation.MineInfo.RunDir, True);
+          ExtraFuncs(LOC_AFTERFIGHT);
+          Exit;
+        End;
+        FindPick;
+        //Rock := Rocks[I];
+      End;
+      If GetSystemTime - Time > 5000 Then
+        If Distance(MSCX, MSCY, rock.x, rock.y) > 100 Then
+          Break;
+      If getsystemtime - time > 1000 * RockSeconds(CurRock) Then
+        break;
+    Until Not FollowRock(rock, CurRock);
+  End;
+End;
+
+Procedure StorePick;
+
+Var
+   x, y: Integer;
+Begin
+  If InvFull Then
+  Begin
+    If FindBitmapMaskTolerance(OreMask, x, y, 559, 210, 735, 460, 5, 10) Then
+    Begin
+      Mouse(x, y, 5, 5, False);
+      ChooseOption('Drop');
+    End;
+  End;
+  GameTab(5);
+  Mouse(593, 303, 0, 0, True);
+  GameTab(4);
+End;
+
+Procedure Bank;
+
+Var
+   x, y, tTotalOres, cts: Integer;
+   I: Integer;
+   T: TReportArray;
+
+Begin
+  If NoPick And Players[CurrentPlayer].Booleans[0] Then
+    StorePick;
+
+  If Not LoggedIn Then
+    Exit;
+  Try
+    If Not CurrentLocation.OpenBank() Then
+      Exit;
+  Except End;
+  If PinScreen Then
+    InPin(Players[CurrentPlayer].Pin);
+
+  T := LoadReport;
+  If BankScreen Then
+    Begin
+      FixBank;
+      cts := GetColorToleranceSpeed;
+      ColorToleranceSpeed(2);
+      SetColorSpeed2Modifiers(0.2, 0.2);
+      For I := 0 To High(T) Do
+        If (T[I].Name <> '') And InStringArray(T[I].Name, CurrentLocation.MineInfo.Ores, True) Then
+        Begin
+          T[I].Value := CountItems(srl_GetBitmap(T[I].bmp), 'bmp', [40]);
+          ClickAllItems(srl_GetBitmap(T[I].bmp), 'bmp', 'All', RandomRange(1000, 1500), [30]);
+          ReportArray[I].Value := ReportArray[I].Value + T[I].Value;
+          ReportVars[I] := ReportVars[I] + T[I].Value;
+          Wait(50);
+        End;
+      ColorToleranceSpeed(1);
+      For I := 0 To High(ReportArray) Do
+        IncEx(tTotalOres, T[I].Value);
+      Players[CurrentPlayer].Integers[0] := Players[CurrentPlayer].Integers[0] + tTotalOres;
+
+      If Players[CurrentPlayer].Booleans[0] Then
+        Deposit(1, 28, True)
+      Else
+        Deposit(2, 28, True);
+      If NoPick Then
+        Withdraw(1, 1, 1);
+    End;
+    
+  If BankScreen Then
+    CloseBank;
+  If NoPick Then
+  Begin
+    If FindPickHeadColor Then
+      NoPick := False
+    Else
+      NoPick := True;
+
+    If FindColor(x, y, Hc1, MIX1, MIY1, MIX2, MIY2) Then
+      Mouse(x, y, 0, 0, True);
+  End;
+
+  If NoPick Then
+  Begin
+    WriteLn('No Pickaxe!');
+    Players[CurrentPlayer].Loc := 'No Pickaxe';
+    LogOut;
+    Exit;
+  End;
+  
+  Players[CurrentPlayer].Banked := Players[CurrentPlayer].Banked + 1;
+  Banks := Banks + 1;
+  Wait(1000 + Random(500));
+
+End;
+
+Function MsToTimeRunning(yTime: Integer): String;
+   // from Timing.scar, by Phalanx and RsN. Edited for custom time.
+var
+  RHours, Minutes, Seconds, RMinutes, RSeconds: LongInt;
+  Time: string;
+begin
+  Result := '';
+  Seconds := yTime div 1000;
+  Minutes := Seconds div 60;
+  RHours := Minutes div 60;
+  Time := IntToStr(Seconds) + ' Seconds';
+  if Minutes <> 0 then
+  begin
+    RSeconds := Seconds mod (Minutes * 60);
+    Time := IntToStr(Minutes) + ' Minutes and ' + IntToStr(RSeconds) +
+      ' Seconds';
+  end;
+  if RHours <> 0 then
+  begin
+    RMinutes := Minutes mod (RHours * 60);
+    RSeconds := Seconds mod (Minutes * 60);
+    Time := IntToStr(RHours) + ' Hours, ' + IntToStr(RMinutes) +
+      ' Minutes and ' + IntToStr(RSeconds) + ' Seconds';
+  end;
+  Result := Time;
+end;
+
+Procedure PlayerReport;
+
+Var
+  Active, Rand: string;
+  I: Integer;
+
+Begin
+  For I := 0 To High(Players) Do
+  Begin
+  
+    If Players[i].Active Then
+      Active := 'T'
+    Else
+      Active := 'F';
+    If Players[i].Rand <> '' Then
+      Rand := '; Rand: ' + Players[i].Rand
+    Else
+      Rand := '';
+      
+    WriteLn((IntToStr(I)) + ' : ' + Players[I].Nick + ' = ' +
+     Active + '; ' + Players[I].Strings[3] + ': ' + Players[I].Loc  + rand + '; B: ' + IntToStr(Players[I].Integers[0])
+     + ' Ores;'+ ' M : ' + IntToStr(Players[I].Level[15]));
+  End;
+End;
+
+{--------------------------------------------------------
+
+            Procedure ProgressReport;
+
+         Prints out the scripts statistics.
+
+--------------------------------------------------------}
+
+Procedure ProgressReport;
+   { Progress Report...}
+Var
+  Rate, Sec, I, TotalOres: Integer;
+
+Begin
+  TotalOres := 0;
+  For I := 0 To High(ReportArray) Do
+    IncEx(TotalOres, ReportArray[I].Value);
+  Sec:= GetTimeRunning div 1000+1;  //by Raymond
+  Rate:= 3600*TotalOres/Sec;
+  WriteLn('----------------------------');
+  WriteLn('');
+  WriteLn('Wizzup and WT-Fakawi Multi Miner, Version. ' + VersionNumber);
+  WriteLn('');
+  WriteLn('Worked for '+ TimeRunning);
+  WriteLn('Ores Mined (and Banked) : '+IntToStr(TotalOres));
+  WriteLn('Mining at a rate of ' + IntToStr(Rate) + ' ores p/h.');
+  WriteLn('');
+  For I := 0 To High(ReportArray) Do
+    If ReportArray[I].Value > 0 Then
+      WriteLn(IntToStr(ReportArray[I].Value) + ' ' + ReportArray[I].Name + ' Ores.');
+  For I := 0 To High(Locations) Do
+    If Locations[I].TimeRan > 0 Then
+      WriteLn(Locations[I].Name + ': ' + MsToTimeRunning(Locations[I].TimeRan));
+      
+  If Gasses > 0 Then WriteLn('Number of avoided gasses: '+IntToStr(Gasses));
+  If PickAxeAttached > 0 Then WriteLn('Picks attached: '+ + IntToStr(PickAxeAttached) + '.');
+  WriteLn('');
+  WriteLn('----------------------------');
+  WriteLn('');
+  PlayerReport;
+  WriteLn('');
+  WriteLn('----------------------------');
+  SRLRandomsReport;
+End;
+
+Function GetAndSetAnyReferenceColor: Boolean;
+
+Var
+   x, y, c, i: integer;
+   s: Array Of String;
+   
+Begin
+  NewAutoColorWorked := False;
+  c := FindRockColor;
+  //c := 4082751;
+  If c > 0 Then
+  Begin
+    SetAutoColorReference('grey rock', c);
+    WriteLn('Got the color using the grey rock');
+    NewAutoColorWorked := True;
+    Result := True;
+    Exit;
+  End;
+  
+  c := FindStoneColor;
+  If c > 0 Then
+  Begin
+    SetAutoColorReference('brown rock', c);
+    WriteLn('Got the color using the brown rock');
+    NewAutoColorWorked := True;
+    Result := True;
+    Exit;
+  End;
+
+  s := CurrentLocation.AutoColorOptions;
+  For I := Low(s) To High(s) Do
+  Begin
+    WriteLn('Trying symbol ' + s[i]);
+    c := GetSymbolColor(x, y, s[i]);
+    If c > 0 Then
+    Begin
+      SetAutoColorReference(s[i], c);
+      WriteLn('Got the color using the ' + s[i] + ' symbol');
+      NewAutoColorWorked := True;
+      Result := True;
+      Exit;
+    End;
+  End;
+End;
+
+{--------------------------------------------------------
+
+                 Procedure DoChats;
+
+            Set's the Chat's in RuneScape.
+
+--------------------------------------------------------}
+
+Procedure DoChats;
+
+Begin
+  SetChat('on',1);
+  SetChat('friends',2);
+  SetChat('on',3);
+End;
+
+Procedure AutoColor;
+
+Begin
+  If Not GetAndSetAnyReferenceColor Then
+  Begin
+    WriteLn('AutoColor Failed.');
+    TerminateScript;
+  End Else
+    WriteLn('AutoColor was succesfull');
+End;
+
+Procedure InitPlayer;
+
+Var
+   I: Integer;
+Begin
+  For I := 1 To 2 Do
+  If Not Players[CurrentPlayer].Booleans[I] Then
+  Begin
+    Case I Of
+      //1: SetBar('Brightness', 4);
+      2: Retaliate(False);
+    End;
+    Players[CurrentPlayer].Booleans[I] := True;
+  End;
+  
+  GetAllLevels;
+  FindPickHeadColor;
+  DoChats;
+  SetAngle(True);
+End;
+
+Procedure ClearVars;
+
+Var
+  I : Integer;
+Begin
+  For I := 0 To 19 Do
+    ReportVars[I] := 0;
+End;
+
+       {Load all the Location Specific Functions and Procedures}
+
+{.include VEM.scar}
+{.include LSM.scar}
+{.include PM.scar}
+{.include CGM.scar}
+
+Procedure Fetch_Location(Var Loc: TLocation);
+   {
+     Return the 'Current' Location.
+   }
+Var
+   I: Integer;
+Begin
+  For I := 0 To High(Locations) Do
+    If LowerCase(Locations[I].Name) = LowerCase(Players[CurrentPlayer].Strings[3]) Then
+    Begin
+      Loc := Locations[I];
+      Exit;
+    End;
+End;
+
+Procedure LoadLocations;
+
+Begin
+  SetLength(Locations, 4);
+  With Locations[0] Do
+  Begin
+    Name := 'VEM';
+    ToMine   := @VEM_ToMine;
+    ToBank   := @VEM_ToBank;
+    Start    := @VEM_Start;
+    Stop     := @VEM_Stop;
+    OpenBank := @VEM_EasyBank;
+    SetOreColor := @VEM_SetOreColor;
+    AutoColorOptions := ['anvil'];
+    Loads := VEMLoads;
+    Report := LoadReport;
+    
+    SetLength(Funcs, 0);
+    SetLength(LocalVars, 0);
+
+    With MineInfo Do
+    Begin
+      HasNewRocks := True;
+      IsNewRock := @VEM_IsNewRock;
+      GasCheck := @new_GasCheck2;//@w_GasCheck;
+      Ores := ['Iron', 'Tin', 'Copper'];
+      MMRockName := 'brown rock';
+      RunDir := 'S';
+      MineDist := 34;
+    End;
+  End;
+  
+  With Locations[1] Do
+  Begin
+    Name := 'LSM';
+    ToMine   := @LSM_ToMine;
+    ToBank   := @LSM_ToBank;
+    Start    := @LSM_Start;
+    Stop     := @LSM_Stop;
+    OpenBank := @LSM_OpenBank;
+    SetOreColor := @LSM_SetOreColor;
+    AutoColorOptions := ['bank'];
+    Loads := LSMLoads;
+    SetLength(Funcs, 2);
+    Report := LoadReport;
+
+    With Funcs[0] Do
+    Begin
+      SetLength(Func, 1);
+      Func[0] := @LSM_SetCallibrateTimer;  // And MakeCompass('E');
+      PointInScript := LOC_ATMINE;
+    End;
+
+    With Funcs[1] Do
+    Begin
+      SetLength(Func, 1);
+      Func[0] := @LSM_Callibrate;
+      PointInScript := LOC_MINING;
+    End;
+
+    SetLength(LocalVars, 3);
+    With LocalVars[0] Do
+    Begin
+      Name  := 'Draynor Bank DTM';
+      IsSet := False;
+      Value := 0;
+      vType := 'DTM';
+    End;
+    
+    With LocalVars[1] Do
+    Begin
+      Name  := 'Callibrate Timer';
+      IsSet := False;
+      Value := 0;
+      vType := 'Timer';
+    End;
+
+    With MineInfo Do
+    Begin
+      HasNewRocks := True;
+      IsNewRock := @LSM_IsNewRock;
+      GasCheck := @w_GasCheck;
+      Ores := ['Coal', 'Mithril', 'Adamant'];
+      MMRockName := 'brown rock';
+      RunDir := 'E';
+      MineDist := 50;
+     End;
+  End;
+  
+  With Locations[2] Do
+  Begin
+    Name := 'PMRMM';
+    ToMine   := nil;
+    ToBank   := nil;
+    Start    := @PM_Start;
+    Stop     := @PM_Stop;
+    OpenBank := nil;
+    SetOreColor := @VEM_SetOreColor;
+    AutoColorOptions := [];
+    Loads := PMLoads;
+    Report := LoadReport;
+
+    SetLength(Funcs, 1);
+
+    With Funcs[0] Do
+    Begin
+      SetLength(Func, 2);
+      Func[0] := @Count_Ores;
+      Func[1] := @Drop_All;
+      PointInScript := LOC_DONEMINING;
+    End;
+    
+    SetLength(LocalVars, 0);
+
+    With MineInfo Do
+    Begin
+      HasNewRocks := True;
+      IsNewRock := @RMM_IsNewRock;
+      GasCheck := @new_GasCheck2;
+      Ores := ['Iron', 'Copper', 'Gold'];
+      MMRockName := 'grey rock';
+      RunDir := 'S';
+      MineDist := 200;
+    End;
+  End;
+
+  With Locations[3] Do
+  Begin
+    Name := 'PMVEM';
+    ToMine   := nil;
+    ToBank   := nil;
+    Start    := @PM_Start;
+    Stop     := @PM_Stop;
+    OpenBank := nil;
+    SetOreColor := @VEM_SetOreColor;
+    AutoColorOptions := [];
+    Loads := PMLoads;
+    Report := LoadReport;
+
+    SetLength(Funcs, 1);
+
+    With Funcs[0] Do
+    Begin
+      SetLength(Func, 2);
+      Func[0] := @Count_Ores;
+      Func[1] := @Drop_All;
+      PointInScript := LOC_DONEMINING;
+    End;
+
+    SetLength(LocalVars, 0);
+
+    With MineInfo Do
+    Begin
+      HasNewRocks := True;
+      IsNewRock := @VEM_IsNewRock;
+      GasCheck := @w_GasCheck;
+      Ores := ['Iron', 'Copper', 'Tin'];
+      MMRockName := 'brown rock';
+      RunDir := 'S';
+      MineDist := 34;
+    End;
+  End;
+End;
+
+Procedure FreeLocation(Loc: TLocation);
+
+Begin
+  With Loc Do
+  Begin
+    Name := '';
+    ToMine := nil;
+    ToBank := nil;
+    Start := nil;
+    Stop := nil
+    OpenBank := nil;
+    SetOreColor := nil;
+
+    SetLength(LocalVars, 0);
+
+    AutoColorOptions := [];
+    With MineInfo Do
+    Begin
+      HasNewRocks := True;
+      IsNewRock := nil;
+      GasCheck := nil;
+      Ores := [];
+      MMRockName := '';
+      RunDir := '';
+      MineDist := 0;
+    End;
+  End;
+End;
+
+{--------------------------------------------------------
+
+           Procedure SetupScript;
+
+   Sets all procedure's needed, and logs in the first player.
+
+--------------------------------------------------------}
+
+Procedure SetupScript;
+
+Begin
+  ClearDebug;
+  LoadLocations;
+  SetupSRL;
+  SetupMining;
+  SetupNewAutoColor;
+  Global_Bitmaps;
+  SymbolAccuracy := 0.8;
+
+  RCMaster := RemoteControlMasterNickName;
+  RCLoc:= 'Bank';
+  NormalRandomsTime := GetSystemTime;
+  FindTalkTime := GetSystemTime;
+  ScriptID := '728';
+  DeclarePlayers;
+  CurrentPlayer := StartPlayer;
+  ClearVars;
+  SRLID := YourSRLID;
+  SRLPassword := YourSRLPass;
+  
+  ReportArray := LoadReport;
+  
+  LoginPlayer;
+  InitPlayer;
+
+  AutoColor;
+End;
+
+{--------------------------------------------------------
+
+                Script Setup.
+
+--------------------------------------------------------}
+
+begin
+  SmartSetupEx(142, false, false, false);
+  SetTargetDC(SmartGetDC);
+  SetupScript;
+  Repeat
+    FreeLocation(CurrentLocation);
+    Fetch_Location(CurrentLocation);
+    CurrentLocation.Start();
+    
+    If Players[CurrentPlayer].Loc = 'Bank' Then
+    Begin
+      Location_Debug('Going to the Mine');
+      
+      ExtraFuncs(LOC_BANK);
+      
+      Try
+        CurrentLocation.ToMine();
+      Except End;
+    End;
+
+    If Players[CurrentPlayer].Loc = 'Mine' Then
+    Begin
+    
+      ExtraFuncs(LOC_ATMINE);
+      
+      Players[CurrentPlayer].Level[15] := GetSkillInfo('mining', False);
+      SetRun(True);
+      
+      Location_Debug('Players.Loc = Mine');
+      Location_Debug('Starting Mine Loop.');
+      
+      MyTimer := GetSystemTime;
+      
+      Repeat
+        Wait(200);
+        If Not MyMine Then
+          if TooFar then
+            If MiddleOfMine(Dx, Dy) Then
+            Begin
+              Location_Debug('Walking back to the mine');
+              Mouse(Dx, Dy, 2, 2, True);
+              FFlag(0);
+            End;
+        If FlagPresent Then
+          Wait(2000+Random(500));
+          
+        ExtraFuncs(LOC_MINING);
+        
+        FindNormalRandomsTimeEx;
+        
+        If Not LoggedIn Then
+        Begin
+          Location_Debug('Not Logged-In, breaking.');
+          Break;
+        End;
+        If Not FindPick Then
+        Begin
+          Location_Debug('No FindPick, breaking.');
+          Break;
+        End;
+      Until (InvFull Or ((GetSystemTime - MyTimer) > 60000 * MinutesPerLoad));
+      
+      ExtraFuncs(LOC_DONEMINING);
+      
+      Location_Debug('Walking to the bank.');
+      
+      Try
+        CurrentLocation.ToBank();
+      Except End;
+      
+      Location_Debug('Players.Loc := Bank');
+      
+      Bank;
+    End;
+      
+    Try
+      If LoggedIn And (Players[CurrentPlayer].Banked Mod CurrentLocation.Loads = 0) Then
+        Begin
+          WriteLn('Switching Players. Time to leave, ' + Players[CurrentPlayer].Name + '.');
+          LogOut;
+          NextPlayer(True);
+          InitPlayer;
+        End;
+      Except
+        Begin
+          WriteLn('Switching Players. Time to leave, ' + Players[CurrentPlayer].Name + '.');
+          LogOut;
+          NextPlayer(True);
+          InitPlayer;
+        End;
+      End;
+    If Not LoggedIn Then
+      Begin
+        NextPlayer(False);
+        NoPick := False;
+        InitPlayer;
+        If NoPick Then LogOut;
+      End;
+      
+    CurrentLocation.Stop();
+    
+    ProgressReport;
+  Until False;
+end.

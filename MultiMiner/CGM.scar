@@ -1,0 +1,119 @@
+Procedure CGM_Start;
+
+Begin
+  Locations[4].WorkedTimer := GetSystemTime;
+  If WaterColor < 1 Then
+  Begin
+    WaterColor := w_GetWaterColor;
+    Location_Debug('WaterColor: ' + IntToStr(WaterColor));
+  End;
+End;
+
+Procedure CGM_Stop;
+
+Begin
+  IncEx(Locations[4].TimeRan, GetSystemTime - Locations[1].WorkedTimer);
+End;
+
+Function WaterTPAInDist(Dist: Integer): TPointArray;
+
+Begin
+  FindColorsTolerance(Result, WaterColor, MMX1, MMY1, MMX2, MMY2, 0);
+  FilterPointsPie(Result, 0, 360, 0, Dist, MMCX, MMCY);
+End;
+
+Function WaterInDist(Dist: Integer): Boolean;
+
+Var
+   TPA: TPointArray;
+Begin
+  TPA := WaterTPAInDist(Dist);
+  Result := Length(TPA) > 40;
+End;
+
+Function WalkWall: Boolean;
+
+Var
+   TPA: TPointArray;
+   I: Integer;
+   
+Begin
+  If RadialWalkEx(TPA, MMCX, MMCY, 9612470, 30, 180, 360, 45) Then
+    for i := 0 to High(tpa) do
+    begin
+      if MFNF(tpa[i].x, tpa[i].y + 15, 0, -1) then
+      begin
+        Wait(1000);
+        FFlag(15);
+        Result := True;
+        Break;
+      end;
+      If I > 10 Then
+      Begin
+        LogOut;
+        WriteLn('WallWalk, I > 10');
+      End;
+    end;
+End;
+
+Procedure CGM_ToMine;
+
+Var
+   T, G: TPoint;
+
+Begin
+
+
+  Repeat
+    WalkWall;
+    wait(100);
+  Until Not WaterInDist(65);
+  T := Point(MMCX - 40, MMCY);
+
+  If Not FindColorSpiral(T.x, T.y, srl_AutoGetColor('grey rock'), MMX1, MMY1, MMX2, MMY2) Then
+  Begin
+    Location_Debug('Could not find the rock color');
+    LogOut;
+  End
+  Else
+    WriteLn('Found rock');
+  
+  G := T;
+  T.x := RandomRange(T.x - 20, T.x - 5);
+  T.y := RandomRange(T.y - 3, T.y + 3);
+  If rs_OnMinimap(t.x, t.y) Then
+    Mouse(T.x, T.y, 0, 0, True)
+  Else
+    Mouse(G.x, G.y, 0, 0, True);
+  Wait(1000);
+  FFlag(0);
+  RoadColor := FindRoadColor;
+  Try
+  
+    If RoadColor > 1 Then
+    Begin
+      T := Point(MMCX, MMCY + 40);
+      If FindColorSpiral(T.X, T.Y, RoadColor, MMX1, MMY1, MMX2, MMY2) Then
+      Begin
+        Mouse(T.x + 4, T.y, 0, 0, True);
+        Wait(500);
+        FFlag(0);
+        Location_Debug('Used RoadColor');
+        Exit;
+      End;
+    End;
+  
+    T := Point(MMCX, MMCY);
+    If FindColorSpiral(T.X, T.Y, srl_AutoGetColor('brown rock'), MMX1, MMY1, MMX2, MMY2) Then
+    Begin
+      Mouse(T.X - 20, T.Y + 4, 0, 0, True);
+      Wait(500);
+      FFlag(0);
+      Location_Debug('Used Brown Rock');
+      Exit;
+    End;
+    
+  Finally
+    Location_Debug('At door');
+  End;
+End;

@@ -1,0 +1,11 @@
+Procedure GM_Start;
+
+Begin
+  Locations[5].WorkedTimer := GetSystemTime;
+End;
+
+Procedure GM_Stop;
+
+Begin
+  IncEx(Locations[5].TimeRan, GetSystemTime - Locations[1].WorkedTimer);
+End;

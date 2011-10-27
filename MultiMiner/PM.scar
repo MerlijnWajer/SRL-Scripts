@@ -1,0 +1,64 @@
+Procedure PM_Start;
+
+Begin
+  Players[CurrentPlayer].Loc := 'Mine';
+  //MakeCompass('330');
+  If Pos('RMM', Players[CurrentPlayer].Strings[3]) <> 0 Then
+    Locations[2].WorkedTimer := GetSystemTime;
+  If Pos('VEM', Players[CurrentPlayer].Strings[3]) <> 0 Then
+    Locations[3].WorkedTimer := GetSystemTime;
+End;
+
+
+Procedure PM_Stop;
+
+Begin
+  If Pos('RMM', Players[CurrentPlayer].Strings[3]) <> 0 Then
+    IncEx(Locations[2].TimeRan, GetSystemTime - Locations[2].WorkedTimer);
+  If Pos('VEM', Players[CurrentPlayer].Strings[3]) <> 0 Then
+    IncEx(Locations[3].TimeRan, GetSystemTime - Locations[3].WorkedTimer);
+
+End;
+
+Function Drop_All: Boolean;
+
+Var
+   I, C: Integer;
+Begin
+  Location_Debug('Dropping all ores now');
+  For C := 0 To 1 Do
+    For I := 1 To 28 Do
+    Begin
+      If DropItem(I) Then
+        FindNormalRandomsTimeEx;
+    End;
+  Result := True;
+End;
+
+Function Count_Ores: Boolean;
+
+Var
+   T: TReportArray;
+   I, tTotalOres, cts: Integer;
+   
+Begin
+  Location_Debug('Counting all ores now');
+  T := LoadReport;
+  CTS := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  SetColorSpeed2Modifiers(0.2, 0.2);
+  For I := 0 To High(T) Do
+    If (T[I].Name <> '') And InStringArray(T[I].Name, CurrentLocation.MineInfo.Ores, True) Then
+    Begin
+      T[I].Value := CountItems(srl_GetBitmap(T[I].bmp), 'bmp', [30]);
+      ReportArray[I].Value := ReportArray[I].Value + T[I].Value;
+      ReportVars[I] := T[I].Value;
+      Wait(50);
+    End;
+  ColorToleranceSpeed(CTS);
+  For I := 0 To High(ReportArray) Do
+    IncEx(tTotalOres, T[I].Value);
+  Players[CurrentPlayer].Integers[0] := Players[CurrentPlayer].Integers[0] + tTotalOres;
+  Result := True;
+  Banks := Banks + 1;
+End;

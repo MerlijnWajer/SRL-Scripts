@@ -1,0 +1,325 @@
+Function VEM_FindBankers(Var Bank: TPoint; Var Angle: Extended): Boolean;
+
+Var
+   I: Integer;
+   B, gB: TPointArray;
+
+
+Begin
+  FindColorsSpiralTolerance(MMCX, MMY2, B, 60909, MMX1, MMCY, MMX2, MMY2, 0);
+  For I := 0 To High(B) - 1 Do
+  Begin
+    If (Abs(B[I].Y - B[I + 1].Y) < 15) And (Abs(B[I].X - B[I + 1].X) < 60) Then
+    Begin
+      SetLength(gB, Length(gB) + 1);
+      gB[High(gB)] := B[I];
+      If High(gB) > 3 Then // 4 bankers.
+      Begin
+        Bank := MiddleTPA(gB);
+        Bank.Y := Bank.Y - 5;
+        Angle := Degrees(ArcTan2(gB[0].y - gB[High(gB)].y, gB[0].x - gB[High(gB)].x)) + 90;
+        If Angle < 0 Then
+          Angle := 90 - (Angle * -1) + 270;
+        Result := True;
+        Exit;
+      End;
+    End
+    Else
+      SetLength(gB, 0);
+  End;
+End;
+
+Function VEM_FindVarrockBank(Var x, y: Integer): Boolean;
+
+Var
+   Angle: Extended;
+   BankP: TPoint;
+
+Begin
+  If VEM_FindBankers(BankP, Angle) Then
+  Begin
+    Location_Debug('Found VEM Bankers, under ' + FloatToStr(Angle) + ' degrees.');
+    Result := True;
+    x := BankP.X;
+    y := BankP.Y;
+  End;
+End;
+
+Procedure VEM_ToMine;
+
+Var
+  Timer: LongInt;
+
+Begin
+  RoadColor := FindVarrockRoadColor;
+  WalkPath(0);
+  MarkTime(Timer);
+  Repeat
+    WalkPath(1);
+    If TimeFromMark(Timer) > 120000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+    If Not LoggedIn Then
+      Exit;
+  Until FindPath(2, False);
+
+  MarkTime(Timer);
+  Repeat
+    If Not LoggedIn Then
+      Exit;
+    If Not RadialRoadWalk(RoadColor, 90, 270, 55, -1, -1) Then
+      RoadColor := FindVarrockRoadColor;
+    If TimeFromMark(Timer) > 120000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+  Until FindPath(3, True);
+
+  Dx := MMCX;
+  Dy := MMCY;
+  If FindColorSpiral(Dx, Dy, srl_AutoGetColor('brown rock'), MMX1, MMY1, MMX2, MMY2) Then
+  Begin
+    Mouse(Dx, Dy, 2, 2, True);
+    FFlag(0);
+  End;
+  Wait(1000+Random(500));
+  If MiddleOfMine(Dx, Dy) Then
+  Begin
+    Mouse(Dx, Dy, 2, 2, True);
+    FFlag(0);
+  End
+  Else
+  Begin
+    Location_Debug('No Middle of mine');
+    TerminateScript;
+    LogOut;
+  End;
+  MakeCompass('330');
+  Players[CurrentPlayer].Loc := 'Mine';
+End;
+
+Procedure VEM_ToBank;
+
+Var
+   x, y, C, Timer, I: Integer;
+   Water, BankFound: Boolean;
+
+Begin
+  ColorToleranceSpeed(1);
+
+  SetRun(False);
+  MakeCompass('N');
+  If Not LoggedIn Then Exit;
+
+  Mouse(665, 35, 5, 5, True);  // Used to be 675, 25.
+  Wait(6000+Random(1000));
+  FFlag(0);
+  FindNormalRandomsTimeEx;
+  RoadColor := FindVarrockRoadColor;
+
+  For I := 0 To 2 Do
+    If Not RadialWalk(RoadColor, 450, 310, 60, -1, 1) Then
+      RoadColor := FindVarrockRoadColor;
+
+
+  MarkTime(Timer);
+  Repeat
+    If Not LoggedIn Then
+      Exit;
+    If Not RadialRoadWalk(RoadColor, 450, 310, 55, -1, 1) Then
+      RoadColor := FindVarrockRoadColor;
+    If TimeFromMark(Timer) > 120000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+  Until FindPath(2, True);
+  WalkPath(4);
+  WalkPath(5);
+
+  MarkTime(Timer);
+  Repeat
+    If (TimeFromMark(Timer) > 320000) Then Begin Logout; Exit; End;
+    If Not LoggedIn Then
+      Exit;
+    BankFound := VEM_FindVarrockBank(x, y);
+    If BankFound Then Break;
+    FindNormalRandomsTimeEx;
+    RadialRoadWalk(RoadColor, 180,280, 30, 1, 0);
+    FTWait(2);
+    If FindSymbol(x, y, 'water') Then
+    Begin
+      Water := True;
+      Break;
+    End;
+  Until BankFound;
+
+  If Water And Not BankFound Then
+  Begin
+    C := 0;
+    While C < 3 Do
+    Begin
+      LinearRoadWalk(RoadColor, 90, 30, 0, -1);
+      BankFound := VEM_FindVarrockBank(x, y);
+      If BankFound Then
+        Break;
+      C := C + 1;
+    End;
+    If Not BankFound Then
+    Begin
+      Players[CurrentPlayer].Loc := 'No MM Bank DTM';
+      LogOut;
+      Exit;
+    End;
+  End;
+
+  If BankFound Then
+  Begin
+    FFlag(0);
+    Wait(500);
+    If VEM_FindVarrockBank(x, y) Then
+      MFNF(x, y, -1, -1);
+    //Mouse(x, y, 0, 0, True);
+
+    Wait(100);
+    FFlag(0);
+
+    Players[CurrentPlayer].Loc := 'Bank';
+  End;
+End;
+
+Function VEM_EasyBank:Boolean;
+
+Var
+   C, x, y: Integer;
+
+Begin
+  C := 0;
+  Repeat
+    FindNormalRandoms;
+    C := C + 1;
+    If OpenBankFast('veb') Then
+    Begin
+      Result := True;
+      Exit;
+    End;
+    If C >= 1 Then
+    Begin
+      If VEM_FindVarrockBank(x, y) Then
+      Begin
+        Mouse(x, y, 0, 0, True);
+        Wait(200 + Random(400));
+        FFlag(0);
+        Wait(100);
+      End;
+    End;
+  Until BankScreen Or Pinscreen Or (C > 10);
+
+  If BankScreen Or Pinscreen Then
+  Begin
+    Result := True;
+    Exit;
+  End Else
+  Begin
+    Players[CurrentPlayer].Loc := 'No MS Bank';
+    Players[CurrentPlayer].Active := False;
+    LogOut;
+  End;
+End;
+
+procedure VEM_LoadPaths;
+
+begin
+  Path[0].Mainpoint.x:=707;     // Out Of East Bank to Left
+  Path[0].Mainpoint.y:=49;
+  Path[0].Subpoints[0].x:=673;
+  Path[0].Subpoints[0].y:=98;
+  Path[0].Subpoints[1].x:=646;
+  Path[0].Subpoints[1].y:=99;
+  Path[0].Subpoints[2].x:=625;
+  Path[0].Subpoints[2].y:=22;
+  Path[0].Subpoints[3].x:=657;
+  Path[0].Subpoints[3].y:=47;
+
+  Path[1].Mainpoint.x:=711;    // Straight Long Line East
+  Path[1].Mainpoint.y:=92;
+  Path[1].Subpoints[0].x:=677;
+  Path[1].Subpoints[0].y:=91;
+  Path[1].Subpoints[1].x:=651;
+  Path[1].Subpoints[1].y:=91;
+  Path[1].Subpoints[2].x:=624;
+  Path[1].Subpoints[2].y:=89;
+  Path[1].Subpoints[3].x:=588;
+  Path[1].Subpoints[3].y:=86;
+
+  Path[2].Mainpoint.x:=669;     // T- Split
+  Path[2].Mainpoint.y:=86;
+  Path[2].Subpoints[0].x:=684;
+  Path[2].Subpoints[0].y:=117;
+  Path[2].Subpoints[1].x:=686;
+  Path[2].Subpoints[1].y:=54;
+  Path[2].Subpoints[2].x:=630;
+  Path[2].Subpoints[2].y:=83;
+
+  Path[3].Mainpoint.x:=648;    // Large Square Shape, Wall and Road
+  Path[3].Mainpoint.y:=149;
+  Path[3].Subpoints[0].x:=636;
+  Path[3].Subpoints[0].y:=93;
+  Path[3].Subpoints[1].x:=650;
+  Path[3].Subpoints[1].y:=95;
+  Path[3].Subpoints[2].x:=652;
+  Path[3].Subpoints[2].y:=108;
+  Path[3].Subpoints[3].x:=635;
+  Path[3].Subpoints[3].y:=108;
+
+  Path[4].Mainpoint.x:=599;     // Way Back
+  Path[4].Mainpoint.y:=95;
+  Path[4].Subpoints[0].x:=664;
+  Path[4].Subpoints[0].y:=120;
+  Path[4].Subpoints[1].x:=650;
+  Path[4].Subpoints[1].y:=91;
+  Path[4].Subpoints[2].x:=660;
+  Path[4].Subpoints[2].y:=60;
+  Path[4].Subpoints[3].x:=631;
+  Path[4].Subpoints[3].y:=95;
+
+  Path[5].Mainpoint.x:=584;   // Way Back 2
+  Path[5].Mainpoint.y:=86;
+  Path[5].Subpoints[0].x:=608;
+  Path[5].Subpoints[0].y:=87;
+  Path[5].Subpoints[1].x:=633;
+  Path[5].Subpoints[1].y:=84;
+  Path[5].Subpoints[2].x:=665;
+  Path[5].Subpoints[2].y:=81;
+  Path[5].Subpoints[3].x:=694;
+  Path[5].Subpoints[3].y:=79;
+end;
+
+Procedure VEM_SetOreColor;
+
+Begin
+  Case Random(20) Of
+    0,1,2,3,4,5,6,7,8,
+    9,10,11,12,13,14,15,16, 17 : CurRock := LowerCase(Players[CurrentPlayer].Strings[0]);
+    18: CurRock := LowerCase(Players[CurrentPlayer].Strings[1]);
+    19: CurRock := LowerCase(Players[CurrentPlayer].Strings[2]);
+  End;
+End;
+
+Procedure VEM_Start;
+
+Begin
+  Locations[0].WorkedTimer := GetSystemTime;
+  SetPathLength(6);
+  VEM_LoadPaths;
+End;
+
+Procedure VEM_Stop;
+
+Begin
+  SetPathLength(0);
+  IncEx(Locations[0].TimeRan, GetSystemTime - Locations[0].WorkedTimer);
+End;

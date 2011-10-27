@@ -1,0 +1,1462 @@
+program EdgevilleFlyFisher;
+
+{.include srl/srl/misc/smart.scar}
+{.include srl/srl.scar}
+
+Const
+   StartPlayer = 0;
+   LoadsTime = 10; // In minutes.
+   YourSRLID  = '';                      // Must be a string!
+   YourSRLPASS =  '';             // Must be a string!
+   RemoteControlMasterNickName = ''; // Part of the Remote Control Masters' Name.
+   Loads = 4;          // Number of loads.
+   NumOfPlayers = 6;   // Number of users.
+   UseRotateWhilstFishing = False;
+   SmartPrefix = 'world10';
+
+Var
+   FishingRod, FishingRodColor, Feather, FeatherColor,
+   BankDTM, LTime: Integer;
+   FishRodColors: Array Of Integer;
+   WhirlPoolAcc: Extended;
+   NoRod, NoFeather: Boolean;
+   CallBTime: LongInt;
+
+   Rods, Trouts, Salmons, MyMark: Integer;
+
+Procedure DeclarePlayers;
+
+Begin
+  HowManyPlayers  := NumOfPlayers;
+  NumberOfPlayers( HowManyPlayers );
+  CurrentPlayer := StartPlayer;
+
+  Players[0].Name :='';
+  Players[0].Pass :='';
+  Players[0].Nick :='';
+  Players[0].Active:=True;
+  Players[0].Loc := 'Bank';
+
+  Players[1].Name :='';
+  Players[1].Pass :='';
+  Players[1].Nick :='';
+  Players[1].Active:=True;
+  Players[1].Loc := 'Bank';
+
+  Players[2].Name :='';
+  Players[2].Pass :='';
+  Players[2].Nick :='';
+  Players[2].Active:=True;
+  Players[2].Loc := 'Bank';
+
+  Players[3].Name :='';
+  Players[3].Pass :='';
+  Players[3].Nick :='';
+  Players[3].Active:=False;
+  Players[3].Loc := 'Bank';
+
+  Players[4].Name :='';
+  Players[4].Pass :='';
+  Players[4].Nick :='';
+  Players[4].Active:=True;
+  Players[4].Loc := 'Bank';
+
+  Players[5].Name :='';
+  Players[5].Pass :='';
+  Players[5].Nick :='';
+  Players[5].Active:=True;
+  Players[5].Loc := 'Bank';
+
+  Writeln( IntToStr ( HowManyPlayers ) + ' Player[s]' );
+End;
+
+{
+<----------------------------------------------------------------->
+Function w_GetWaterColor: Integer;
+Description:
+
+  Fast auto GetWaterColor.
+
+  Made By: WT-Fakawi.
+<----------------------------------------------------------------->
+}
+
+Function w_GetWaterColor: Integer;
+ // I should do it with a For Int := 0 To High(Colors) Do, but don't feel like it now.
+Var
+   z: Integer;
+   TPA: TPointArray;
+   aTPA: T2DPointArray;
+
+Begin
+  Result := -1;
+  z := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+
+  FindColorsTolerance(TPA, 12161662, MMX1, MMY1, MMX2, MMY2, 10);
+  FilterPointsPie(TPA, 0, 360, 0, 65, MMCX, MMCY);
+  aTPA := SplitTPA(TPA, 4);
+  SortATPASize(aTPA, True);
+  If Length(aTPA) > 0 Then
+  Begin
+    If Length(aTPA[0]) > 40 Then
+      Result := GetColor(aTPA[0][0].x, aTPA[0][0].y);
+  End Else
+  Begin
+    SetLength(TPA, 0);
+    SetLength(aTPA, 0);
+    FindColorsTolerance(TPA, 10324604, MMX1, MMY1, MMX2, MMY2, 10);
+    FilterPointsPie(TPA, 0, 360, 0, 65, MMCX, MMCY);
+    aTPA := SplitTPA(TPA, 4);
+    SortATPASize(aTPA, True);
+    If Length(aTPA) > 0 Then
+    Begin
+      If Length(aTPA[0]) > 40 Then
+        Result := GetColor(aTPA[0][0].x, aTPA[0][0].y);
+    End Else
+    Begin
+      WriteLn('Could not find water Color.');
+      ColorToleranceSpeed(z);
+      TerminateScript;
+    End;
+  End;
+  ColorToleranceSpeed(z);
+End;
+
+Type
+  FoodState = (None, Raw, Cooked, Burnt);
+
+  FoodBitmap = Record
+    Raw, Cooked, Burnt: Integer;
+  End;
+
+  Food = Record
+    Name: String;
+
+    OutLinePixels, HPBoost: Integer;
+    FoodBMP: FoodBitmap;
+  End;
+
+  InvFood = Record
+    Name: String;
+    State: FoodState;
+  End;
+
+  InvFoodAr = Array Of InvFood;
+  FoodAr = Array Of Food;
+
+Var
+   FoodArray: FoodAr;
+
+Procedure LoadFishArray;
+
+Begin
+  SetLength(FoodArray, 5);
+  FoodArray[0].Name := 'Shrimp';
+  FoodArray[0].OutLinePixels := 137;
+  FoodArray[0].HPBoost := 2;
+
+  FoodArray[0].FoodBMP.Raw := BitmapFromString2(False, 'a33EE978DA5D8E49120' +
+       '3200804BF84C2B01C5DFFFFA480C9291E5AAB6DAA20A2C693F2DC' +
+       '9D105B49C849AAF7642B41E2A3FC0B955F33ABC1D532FD79A9A6B' +
+       'B94C7FAFB85D5A5D69276ACCAAF772E7FBC7CBCE646BDB9F6B10A' +
+       'C946358DE2EDE92BA68EBD31D875EB80C797718D318334D0A3EB8' +
+       '40474030640188D57DF1ECAB25DB5C9725692A14B0E67C5BB5F33' +
+       '98FC7ABD3971B58BB32384B87D006F2');
+
+  FoodArray[0].FoodBMP.Cooked := BitmapFromString2(False, 'aF351F78DA5D8F390E0431' +
+       '0804BFC46920F4D8F8FF4F1AB07693494AADA205020020AD00130' +
+       'BE2B3A84F8BC1EBE66C9ED186AE97EE904B7B5D9FA93A774E2F5A' +
+       'B41A273AF36EDE5336BB83D01E8E6F0DC267AB7D185B05C997CCE' +
+       '291F5A761ED4AD91410AE32207F4451C831D92194E88130E553EF' +
+       'DDFE489E4564AEA9D1867801D07');
+
+  FoodArray[0].FoodBMP.Burnt := BitmapFromString2(False, 'a9407678DA5D8EDB0DC' +
+       '4200C045BF20363F80402FD9714AF738AA263A489B5AC1588888D' +
+       'E23097B0F615AEB5C29A3321AFD6D04140A58DB04D7A3B36377C7' +
+       '24B904BC396D9FACB4B7E7CE197DE732ED8F589BE64C79AA2BFDB' +
+       'DBA9A763D60BF67C2D21A1D39CEBA8C38695E0E342BA82A1167C2' +
+       'C97CC8079F356570E1EAB9CA08B0779FB6B3E7E72130DF2F606CF' +
+       '9');
+
+  FoodArray[1].Name := 'Anchovy';
+  FoodArray[1].OutLinePixels := 137;
+  FoodArray[1].HPBoost := 2;
+  FoodArray[1].FoodBMP.Raw :=  BitmapFromString2(False, 'aA438E78DA4D8F5B0AC' +
+       '5300805B764128F9ACF3CF7BFA4AABD94DB034319A60925A22220' +
+       '679D4ED6E5041FA7580D1F829AA5210EF288267292128D28A7890' +
+       '6265F532D3DF2CC9B3E7282BE5F15A71E8D323D234DDEAEA34573' +
+       '2CDE71833B4FB83D38F13585C2D03553B3D1BB751BFC4FD97254A' +
+       '4F9A6C4B3C57C17C5A70DBE818525FCE3C494CA9D3BFCC77DFB2D' +
+       'F9F00178F142E598B4D516D3031D1');
+
+  FoodArray[1].FoodBMP.Cooked := BitmapFromString2(False, 'aD39FE78DA4D8D410E43' +
+       '210805AF04F2105C8A95FB1FA9E26F7EEA62428689101133D3792' +
+       'B0FC4F7612714310F356AD9B9150DD754A3DEDFA6F9F5BA8A797D' +
+       'E504AD9F0DD5DB94F2DB6BD6BA659F5BE62886BE0D53194A3F277' +
+       '82C139B73FC5345DD1602D9134BC9F8A12C908E365A9CC910DD7F' +
+       '04BC77710995162DC1B221FA797A09D96AD2A463B51406BED12');
+
+  FoodArray[1].FoodBMP.Burnt := BitmapFromString2(False, 'a9407678DA5D8EDB0DC' +
+       '4200C045BF20363F80402FD9714AF738AA263A489B5AC1588888D' +
+       'E23097B0F615AEB5C29A3321AFD6D04140A58DB04D7A3B36377C7' +
+       '24B904BC396D9FACB4B7E7CE197DE732ED8F589BE64C79AA2BFDB' +
+       'DBA9A763D60BF67C2D21A1D39CEBA8C38695E0E342BA82A1167C2' +
+       'C97CC8079F356570E1EAB9CA08B0779FB6B3E7E72130DF2F606CF' +
+       '9');
+
+  FoodArray[2].Name := 'Meat';
+  FoodArray[2].OutLinePixels := 81;
+  FoodArray[2].HPBoost := 4;
+  FoodArray[2].FoodBMP.Raw := BitmapFromString2(False, 'a42D9078DA7D8D490E433' +
+       '10843AF04240C59429BDCFF48C5E9E27755213D908D8188E8BC1A' +
+       '54D1988E59E76E5A4893AF3987410F7B5CC5BEC484A23775E01A4' +
+       '2A48E66CE4DDF8ECDAFCE6FE8A58F5BB820F72F8D5DA7B4EB2F93' +
+       '64B0FCB246AE8CA4A54B2383833EDFE');
+
+  FoodArray[2].FoodBMP.Cooked := BitmapFromString2(False, 'a3348B78DA7D8D3B160' +
+       '3210C03AF84F1774B88E1FE478A4511B68A8B29A4F1536B8D78B6' +
+       'BA9D051EA368D47FD444A261A047913ED085EDE6B2E02BDA1E824' +
+       '421E9466BFDF8CE45D77D49D8B5A9E0C0573FA652DEDC09E63CAD' +
+       '9F615EB1F511FE4F4FC9B6DE0C51E274916037E1ECF90572F');
+
+  FoodArray[2].FoodBMP.Burnt := BitmapFromString2(False, 'aD315E78DA7D8D4B120' +
+       '3210844AFC41F663B23B9FF9142B348B28A543DBBECA712114BD0' +
+       'AC06F57A8611C8A19BC940AF21E3804CD17A2DAD3FAD144C7748F' +
+       'EDA1764FDDDF271F0DABCB7F2862FEB381FF8379C48FEB6B95F6A' +
+       'DBB19AF94B616EEE5F5A9898E8D19A4965E537E54');
+
+  FoodArray[3].Name := 'Trout';
+  FoodArray[3].OutLinePixels := 75;
+  FoodArray[3].HPBoost := 7;
+  FoodArray[3].FoodBMP.Raw := BitmapFromString(11, 8, 'beNpFj1kLglAUhPXf1mMF9ZDVk' +
+       'yW0SGQLYUlEmQWWWGabYXu2WYIE/ZkGLhR8XA7MzLlzKJqi6HgknI' +
+       'pFWYbhWbaSy0qCMJCksaKYqrrQNEiZZKKYSdcK+Val3BNFXZYhrXT' +
+       'dNqfbxbzEcXWeb1erSrOhdTuQrMkY0n65PNv2ZbeD52BZZL4fj2vD' +
+       '+EE2hIIB33Vf18vjfALz0RBfbGYzbCBBooKn4wC0ggdxvKiBwbvdf' +
+       'sCGLEAQkjHo4xZsAG/P+/g+ajjbDQ7/8wXpSK1U');
+
+  FoodArray[3].FoodBMP.Cooked := BitmapFromString2(False, 'a3368278DA4DCE4112032108' +
+       '44D12BA1D2DDB01C75BCFF9122A92CB279557C58606636F7C5342' +
+       'E9E71E55865EB2559A27A0FBF02B5C5F9F63A316475650DC22917' +
+       'CA59BD59968390A713D31F0FBCBEFD61827019169206F3CD3BA37' +
+       '1E38124761CBD4CFAAF381B5E2D8A2306172324E3525DB4FF1253' +
+       '83275E41EDBFA489EAD915F7196A491F04A');
+
+  FoodArray[3].FoodBMP.Burnt := BitmapFromString2(False, 'a0423878DA658D4B0EC' +
+       '5200C03AF14E284CF9252B8FF915E9C7651E961696A46A11191A2' +
+       '55E26C1263056B65AFC82E467A0F160AC14DE3D7A6B7999D5E7B7' +
+       'AE7909FFC83D25B7EDA72726437BE6D17E7F59999397F06FD04FB' +
+       'CE8D425350013D7AD050220F6F74C44AACC884473EC6AA6964984' +
+       '71E031C9CD7DCD6AD7BAC8DFB9F71B565EBE5D7B86DDB2F9B172F' +
+       '3F915');
+
+  FoodArray[4].Name := 'Salmon';
+  FoodArray[4].OutLinePixels := 75;
+  FoodArray[0].HPBoost := 9;
+  FoodArray[4].FoodBMP.Raw := BitmapFromString2(False, 'a8432F78DA45CE41124' +
+       '3210844C12B8132032E15BFF73F522449252E7AF1C05211D146B9' +
+       'E729CDF30A7BAE8C76D50A62317F1D4F94A7F6A9B543B16B8B12C' +
+       '8FFB486027FEFB85EFDF1DAFCF4E8FFDEEA96F75DE294EFB75446' +
+       'D9E96EDBE01B6A1182662336167404158C0EB3190B0332C0FB89A' +
+       '90CE49CDCD44F1987C49AC1A42C752517DC18139C38DFE20E8E95' +
+       '1E5C29BEB8BFE5F1C9CCE6C993F4E39A339AF717B79');
+
+  FoodArray[4].FoodBMP.Cooked := BitmapFromString2(False, 'aC399478DA4DCFCB8D04310' +
+       '804D09428F36938B66D9C7F48035E69672E4FA840208888F628C8' +
+       'DF42AE2AD9A6B7C74A43CF184939BC555DDFEE5DA0CE5D3F289FD' +
+       '1DD8777ABA7BD3B41D1B2F96160843197C18AF106BFD0A97CA0B1' +
+       '6F62EC950CDEA86332106B8A21FE9299377151D4B804E67679319' +
+       '7FD2453166692ECB2BEFA4FB8EB7425642E05B28E0AF203A02');
+
+  FoodArray[4].FoodBMP.Burnt := BitmapFromString2(False, 'a0423878DA658D4B0EC' +
+       '5200C03AF14E284CF9252B8FF915E9C7651E961696A46A11191A2' +
+       '55E26C1263056B65AFC82E467A0F160AC14DE3D7A6B7999D5E7B7' +
+       'AE7909FFC83D25B7EDA72726437BE6D17E7F59999397F06FD04FB' +
+       'CE8D425350013D7AD050220F6F74C44AACC884473EC6AA6964984' +
+       '71E031C9CD7DCD6AD7BAC8DFB9F71B565EBE5D7B86DDB2F9B172F' +
+       '3F915');
+End;
+
+Function GetOutLine(InvSlot: Integer): Integer;
+
+Var
+   Box: TBox;
+   Count: TPointArray;
+
+Begin
+  If Not LoggedIn Then
+    Exit;
+  Box := InvBox(InvSlot);
+  FindColorsTolerance(Count, 65536, Box.x1, Box.y1, Box.x2, Box.y2, 0);
+  Result := Length(Count);
+End;
+
+Function StateToString(S: FoodState): String;
+
+Begin
+  Case S Of
+    None: Result := 'None';
+    Raw: Result := 'Raw';
+    Cooked: Result := 'Cooked';
+    Burnt: Result := 'Burnt';
+  End;
+End;
+
+Function GetFullInv: InvFoodAr;
+
+Var
+   I, C, x, y: Integer;
+   iBox: TBox;
+
+Begin
+  ClearReport;
+  SetLength(Result, 0);
+  SetLength(Result, 28);
+  If Not LoggedIn Then
+    Exit;
+  For I := 1 To 28 Do
+  Begin
+    iBox := InvBox(I);
+    For C := 0 To High(FoodArray) Do
+    Begin
+      If GetOutLine(I) <> FoodArray[C].OutLinePixels Then
+        Continue;
+      If FindBitmapToleranceIn(FoodArray[C].FoodBMP.Raw, x, y, iBox.x1, iBox.y1, iBox.x2, iBox.y2, 30) Then
+      Begin
+        Result[I - 1].Name := FoodArray[C].Name;
+        Result[I - 1].State := Raw;
+        Break;
+      End;
+      If FindBitmapToleranceIn(FoodArray[C].FoodBMP.Cooked, x, y, iBox.x1, iBox.y1, iBox.x2, iBox.y2, 30) Then
+      Begin
+        Result[I - 1].Name := FoodArray[C].Name;
+        Result[I - 1].State := Cooked;
+        Break;
+      End;
+      If FindBitmapToleranceIn(FoodArray[C].FoodBMP.Burnt, x, y, iBox.x1, iBox.y1, iBox.x2, iBox.y2, 30) Then
+      Begin
+        Result[I - 1].Name := FoodArray[C].Name;
+        Result[I - 1].State := Burnt;
+        Break;
+      End;
+    End;
+  End;
+End;
+
+Function GetFoodCount(Name: String; fState: FoodState; Inv: InvFoodAr): TIntegerArray;
+
+Var
+   I, C: Integer;
+Begin
+  C := 0;
+  SetLength(Result, Length(Inv));
+  For I := 0 To High(Inv) Do
+    If LowerCase(Inv[i].Name) = LowerCase(Name) Then
+      If Inv[i].State = fState Then
+      Begin
+        Result[C] := I;
+        C := C + 1;
+      End;
+  SetLength(Result, C);
+End;
+{
+<----------------------------------------------------------------->
+Function FindFishingSpots: TPointArray;
+Description:
+
+  Finds all RuneScape 2 Fishing spots on the MainScreen.
+  Mainscreen is defined by MSX1, MSY1, MSX2, MSY2.
+  The spots are sorted by Distance, the first in the array
+  is the one closest to the RS char (MSCX, MSCY).
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function FindFishingSpots: TPointArray;
+
+Var
+   Fish: TPointArray;
+   Fishes: Array Of TPointArray;
+   I, cts: Integer;
+
+Begin
+  If Not LoggedIn Then Exit;
+  SetLength(Result, 0);
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  FindColorsSpiralTolerance(MSCX, MSCY, Fish, 12828090, MSX1, MSY1, MSX2, MSY2, 20);
+  Fishes := TPAToATPA(Fish, 25);
+  SetLength(Fish, 0);
+  SetLength(Result, Length(Fishes));
+  For I := 0 To High(Fishes) Do
+  Begin
+    If Length(Fishes[I]) < 5 Then
+      Continue;
+    Result[I] := MiddleTPA(Fishes[I]);
+  End;
+  SetLength(Fishes, 0);
+  ColorToleranceSpeed(cts);
+End;
+
+{
+<----------------------------------------------------------------->
+Function FindFishingSpot(Var x, y: Integer): Boolean;
+Description:
+
+  Uses FindFishingSpots to find a fishing spot on the
+  RuneScape mainscreen.
+  Returns the coordinate of the fishing spot in x and y.
+  Result Returns True if the spot is found.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function FindFishingSpot(Var x, y: Integer): Boolean;
+
+Var
+   Fish: TPointArray;
+   I: Integer;
+
+Begin
+  If Not LoggedIn Then Exit;
+  Result := False;
+  Fish := FindFishingSpots;
+  For I := 0 To Length(Fish) - 1 Do
+  Begin
+    MMouse(Fish[I].X, Fish[I].Y, 0, 0);
+    Wait(150 + Random(50));
+    If IsUpTextMultiCustom(['ure', 'ishi', 'ing Spot']) Then
+    Begin
+      Result := True;
+      x := Fish[I].X;
+      y := Fish[I].Y;
+      Exit;
+    End;
+  End;
+End;
+
+{
+<----------------------------------------------------------------->
+Function FollowSpot(Var x, y: integer): Boolean;
+Description:
+
+  Tracks the RuneScape fishing spot.
+  Search in a small area around x and y.
+  If a fishing spot if spotted, it will return the new coordinate.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function FollowSpot(Var x, y: integer): Boolean;
+
+Var
+   FishP: TPointArray;
+   P: TPoint;
+   z: Integer;
+Begin
+  Result := False;
+  If Not LoggedIn Then
+    Exit;
+  z := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  FindColorsTolerance(FishP, 12828090, x - 20, y - 20, x + 20,  y + 20, 40);
+  If Length(FishP) > 15 Then
+  Begin
+    Result := True;
+    P := MiddleTPA(FishP);
+    x := P.X;
+    y := P.Y;
+  End;
+  ColorToleranceSpeed(z);
+End;
+
+Function RealFollowSpot(Var x, y: Integer): Boolean;
+
+Var
+   dx, dy, i: Integer;
+Begin
+  dx := x;
+  dy := y;
+  For i := 0 To 10 Do
+  Begin
+    x := dx;
+    y := dy;
+    If FollowSpot(x, y) Then
+    Begin
+      Result := True;
+      Exit;
+    End;
+    FindTalk;
+    Wait(200);
+  End;
+End;
+
+{
+<----------------------------------------------------------------->
+Function Fishing(x, y: integer): Boolean;
+Description:
+
+  Returns True is the RuneScape character is fishing.
+  Checks for the existance of a certain amount of colors
+  in a small box around x and y.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function Fishing(x, y: integer): Boolean;
+
+Var
+   RodPoints: TPointArray;
+
+Begin
+  If Not LoggedIn Then Exit;
+  ColorToleranceSpeed(2);
+  y := y - 15;
+  FindColorsTolerance(RodPoints, 6951, x - 40, y - 40, x + 40, y + 40, 15);
+  Result := (Length(RodPoints) > 5)
+  ColorToleranceSpeed(1);
+End;
+
+{
+<----------------------------------------------------------------->
+Function FindWhirlPool(x, y: integer): Boolean;
+Description:
+
+  Returns true if a RuneScape Whirlpool is found at x, y.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function FindWhirlPool(x, y: integer): Boolean;
+
+Var
+   FishPoints: TPointArray;
+   cts: Integer;
+
+Begin
+  Result := False;
+  If Not LoggedIn Then Exit;
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  setcolorspeed2modifiers(20.0, 2.0);
+  FindColorsTolerance(FishPoints, 13947343, x - 20, y - 20, x + 20, y + 20, 5);
+  setcolorspeed2modifiers(0.2, 0.2);
+  If Length(FishPoints) < 2000 Then
+    Exit;
+  WriteLn('WhirlPool pixels: ' + IntToStr(Length(FishPoints)));
+  If Length(FishPoints) > Round(230 * WhirlPoolAcc) Then
+  Begin
+    WhirlPools := Whirlpools + 1;
+    WriteLn(FloatToStr(Length(FishPoints) / 1600.0)+ '% is whirlpool');
+    Result := True;
+  End;
+  ColorToleranceSpeed(cts);
+End;
+
+{
+<----------------------------------------------------------------->
+Function FindEdgevilleBank(Var x, y: Integer): Boolean;
+Description:
+
+  Searches on the RuneScape minimap for a deformed template model.
+  Uses FindDTMRotated.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function FindEdgevilleBank(Var X, Y: Integer): Boolean;
+
+Var
+   I: Integer;
+   B: TBox;
+   Bankers: TPointArray;
+   aBankers: T2DPointArray;
+
+Begin
+  Result := False;
+  FindColorsTolerance(Bankers, 60909, MMX1, MMY1, MMCX, MMY2, 0);
+  aBankers := SplitTPA(Bankers, 35);
+  For I := 0 To High(aBankers) Do
+    If Length(aBankers[I]) = 4 Then
+    Begin
+      //WriteLn(IntToStr(Length(aBankers[I])));
+      B := GetTPABounds(aBankers[I]);
+      Result := True;
+      X := B.X1 - 8;
+      Y := B.Y2 - 5;
+    End;
+End;
+
+function RadialWalkOff(TheColor: Integer; StartRadial, EndRadial: Integer; Radius: Integer; Xmod, Ymod, xoff, yoff: Integer): Boolean;
+var
+  tpa: TPointArray;
+  i: Integer;
+begin
+  Result := False;
+  if RadialWalkEx(tpa, MMCX, MMCY, TheColor, 0, StartRadial, EndRadial, Radius) then
+    for i := 0 to High(tpa) do
+      if MFNF(tpa[i].x + xoff, tpa[i].y + yoff, Xmod, Ymod) then
+      begin
+        FFlag(10);
+        Result := True;
+        Break;
+      end;
+end;
+
+{
+<----------------------------------------------------------------->
+Procedure ToBank;
+Description:
+
+  Walks from the fishing spot to the Edgeville bank.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function FindFishSymbol(Var x, y: Integer): Boolean;
+
+Var
+   aTPA: T2DPointArray;
+   TPA: TPointArray;
+   cts, I: Integer;
+
+Begin
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  SetColorSpeed2Modifiers(0.2, 0.2);
+  FindColorsTolerance(TPA, 16739084, MMX1, MMY1, MMX2, MMY2, 30);
+  ColorToleranceSpeed(1);
+  aTPA := SplitTPA(TPA, 10);
+  For I := 0 To High(aTPA) Do
+    If (Length(aTPA[I]) > 2) And (Length(aTPA[I]) < 400) Then
+    Begin
+      //FishSymbolColor := GetColor(aTPA[I][0].x, aTPA[I][0].y);
+      Result := True;
+      MiddleTPAEx(aTPA[I], x, y);
+    End;
+End;
+
+Procedure ToBank;
+
+Var
+   x, y, WalkMark, I, R: Integer;
+   B: Boolean;
+
+Begin
+  If Not LoggedIn Then Exit;
+  B := False;
+  MakeCompass('N');
+  MarkTime(WalkMark);
+  FindNormalRandoms;
+  Repeat
+
+    Wait(50);
+    I := I + 1;
+    If I > 3 Then
+      R := 10;
+    If RadialWalkOff(WaterColor, 315, 420, RandomRange(60 - R, 70 - R), -1, -1, -10, 0) Then
+      FFlag(15);
+    If TimeFromMark(WalkMark) > 120000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+    If I > 3 Then
+      If Not FindEdgeVilleBank(x, y) Then
+      Begin
+        If FindSymbol(x, y, 'Bank') Then
+        Begin
+          B := True;
+          Break;
+        End;
+      End
+      Else
+      Begin
+        B := True;
+        Break;
+      End;
+
+  Until False;
+
+  FindNormalRandoms;
+
+  If B Then
+  Begin
+    MFNF(x, y, -1, 1);
+    Wait(100);
+    FFlag(0);
+    Wait(500);
+  End;
+  Players[CurrentPlayer].Loc := 'Bank';
+End;
+
+{
+<----------------------------------------------------------------->
+Procedure ToFish;
+Description:
+
+  Walks from the Edgeville bank to the fishing spot.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Procedure ToFish;
+
+Var
+   x, y, WalkMark, I: Integer;
+Begin
+  If Not LoggedIn Then Exit;
+  MakeCompass('N');
+  MarkTime(WalkMark);
+  FindNormalRandoms;
+  Repeat
+    Wait(50);
+    I := I + 1;
+    If RadialWalkOff(WaterColor, 190, 100, RandomRange(50, 70), -1, -1, -10, 0) Then
+      FFlag(15);
+    If TimeFromMark(WalkMark) > 120000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+    If I > 3 Then
+    Begin
+      If FindSymbol(x, y, 'fishing spot') Then
+        Break;
+      If FindFishSymbol(x, y) Then
+        Break;
+    End;
+  Until False;
+  FindNormalRandoms;
+  Mouse(x, y, 0, 0, True);
+  FFlag(0);
+  FindNormalRandoms;
+  Wait(1000);
+  If Not FindFishingSpot(x, y) Then
+    If FindSymbol(x, y, 'fishing spot') Then
+    Begin
+      Mouse(x, y, 0, 0, True);
+      FFlag(0);
+      Wait(2000);
+    End;
+  Players[CurrentPlayer].Loc := 'Fishing';
+End;
+
+{
+<----------------------------------------------------------------->
+Procedure HandleFight;
+Description:
+
+  Runs North if a fight has been found.
+  Will only be called if a fight is found. (FindFight)
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Procedure HandleFight;
+
+Begin
+  MakeCompass('N');
+  ToBank;
+  Wait(4000);
+  ToFish;
+  MakeCompass('N');
+End;
+
+{
+<----------------------------------------------------------------->
+Function Callibrate: Boolean;
+Description:
+
+  If our character has not found a fishing spot, or he has been
+  at a spot for a certain time, then Callibrate will come
+  further than it's second line.
+
+  Will search for both the Fishing Symbols, and walk to the
+  non-closest.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function Callibrate: Boolean;
+
+Var
+   CTPA: Array Of TPoint;
+   I, B: Integer;
+
+Begin
+  If Not LoggedIn Then Exit;
+  If GetSystemTime - CallBTime < 25000 Then Exit;
+  CallBTime := GetSystemTime;
+  FindSymbols(CTPA, 'fishing spot');
+  If Length(CTPA) = 2 Then
+  Begin
+    I := Max(Distance(MMCX, MMCY, CTPA[0].X, CTPA[0].Y),
+         Distance(MMCX, MMCY, CTPA[1].X, CTPA[1].Y));
+    If I = Distance(MMCX, MMCY, CTPA[0].X, CTPA[0].Y) Then
+      B := 0
+    Else
+      B := 1;
+
+    Mouse(CTPA[B].X, CTPA[B].Y, 0, 0, True);
+    Wait(100);
+    FFlag(0);
+    Wait(500);
+    Result := True;
+    Exit;
+  End;
+End;
+
+{
+<----------------------------------------------------------------->
+Procedure ShrinkArray(Var a: Array Of Integer);
+Description:
+
+  Takes out all duplicate numbers in an Array Of Integer.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Procedure ShrinkArray(Var a: Array Of Integer);
+
+Var
+   I, C, J, MyC: Integer;
+   cCond: Boolean;
+
+Begin
+  MyC := MyC xor MyC;
+  For I := 0 To Length(a) - 1 Do
+  Begin
+    cCond := False;
+    For C := 0 To MyC - 1 Do
+    Begin
+      If a[I] = a[c] Then
+      Begin
+        cCond := True;
+        Break;
+      End;
+    End;
+    If Not cCond Then
+    Begin
+      For J := I DownTo 1 Do
+      Begin
+        Swap(A[J], A[J - 1]);
+      End;
+      MyC := MyC + 1;
+    End;
+  End;
+  SetArrayLength(a, MyC);
+End;
+
+{
+<----------------------------------------------------------------->
+Function IsFishRod: Boolean;
+Description:
+
+  Returns true if the fishing rod color is found, if not found
+  then tries to find the rod and get new colors.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function IsFishRod: Boolean;
+
+Var
+   x, y, z: Integer;
+   Ar: TPointArray;
+
+Begin
+  If Not LoggedIn Then Exit;
+  GameTab(4);
+
+  Result := FindColor(x, y, FishingRodColor, MIX1, MIY1, MIX2, MIY2);
+  If Result Then Exit;
+
+  If FindBitmapToleranceIn(FishingRod, x, y, MIX1, MIY1, MIX2, MIY2, 50) Then
+  Begin
+    z := GetColorToleranceSpeed;
+    Result := True;
+    FishingRodColor := GetColor(x, y);
+    ColorToleranceSpeed(2);
+    FindColorsTolerance(Ar, FishingRodColor, x - 20, y - 20, x + 20, y + 20, 25);
+    ColorToleranceSpeed(z);
+    FishRodColors := GetColors(Ar);
+    ShrinkArray(FishRodColors);
+    WriteLn('FishingRodColor: ' +IntToStr(FishingRodColor));
+  End;
+End;
+
+{
+<----------------------------------------------------------------->
+Function IsFeather: Boolean;
+Description:
+
+  Returns true if the feather color is found, if not found
+  then tries to find the rod and get new feather colors.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function IsFeather: Boolean;
+
+Var
+   x, y: Integer;
+
+Begin
+  If Not LoggedIn Then Exit;
+  GameTab(4);
+
+  Result := FindColor(x, y, FeatherColor, MIX1, MIY1, MIX2, MIY2);
+  If Result Then Exit;
+                  //findfeather werkt niet
+  Result := FindBitmapToleranceIn(Feather, x, y, MIX1, MIY1, MIX2, MIY2, 50);
+  If Result Then
+  Begin
+    FeatherColor := GetColor(x, y);
+    WriteLn('FeatherColor: ' +IntToStr(FeatherColor));
+  End
+  Else
+    WriteLn('Could not find rod in inv.');
+End;
+
+{
+<----------------------------------------------------------------->
+Function FindFeather: Boolean;
+Description:
+
+  If Feather is not found, then logs out.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function FindFeather: Boolean;
+
+Begin
+  If Not LoggedIn Then Exit;
+  Result := True;
+  If Not IsFeather Then
+  Begin
+    Result := False;
+    NoFeather := True;
+    Exit;
+  End;
+End;
+
+{
+<----------------------------------------------------------------->
+Function FindRod: Boolean;
+Description:
+
+  If Rod is not found, then tries to retreive it.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function FindRod: Boolean;
+
+Var
+   x, y, i: Integer;
+Begin
+  If Not LoggedIn Then Exit;
+
+  Result := True;
+
+  If Not IsFishRod Then
+  Begin
+    NoRod := True;
+    Result := False;
+    Wait(4000+Random(1000));
+    MakeCompass('W');
+    Wait(500);
+    WriteLn('Lost Rod, retreiving it.');
+    For I := 0 To High(FishRodColors) Do
+    Begin
+      If FindObj(x, y, 'rod', FishRodColors[I], 0) Then
+      Begin
+        Wait(40);
+        Mouse(x, y, 0, 0, True);
+        Wait(100);
+        FFlag(0);
+        Wait(500);
+        MakeCompass('N');
+        If IsFishRod Then
+        Begin
+          WriteLn('Found rod: ' +IntToStr(I));
+          Result := True;
+          Rods := Rods + 1;
+          ReportVars[2] := ReportVars[2] + 1;
+          NoRod := False;
+          Exit;
+        End;
+      End Else WriteLn('Did not find the Rod: '+IntToStr(I));
+    End;
+  End;
+End;
+
+{
+<----------------------------------------------------------------->
+Function RotateAndFollow(Var x, y: Integer; Time: Integer): Boolean;
+Description:
+
+  Anti ban, moves RS while following the fishing spot.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function RotateAndFollow(Var x, y: Integer; Time: Integer): Boolean;
+
+Var
+   RotateTime, Key: Integer;
+Begin
+  If Not UseRotateWhilstFishing Then
+    Exit;
+  If Not LoggedIn Then Exit;
+  Key := Random(2);
+  Case Key Of
+    0: KeyDown(VK_LEFT);
+    1: KeyDown(VK_RIGHT)
+  End;
+  RotateTime := GetSystemTime;
+  Repeat
+    Result := FollowSpot(x, y);
+    Wait(40);
+  Until GetSystemTime - RotateTime > Time;
+  Case Key Of
+    0: KeyUp(VK_LEFT);
+    1: KeyUp(VK_RIGHT);
+  End;
+End;
+
+{
+<----------------------------------------------------------------->
+Function Fish: Boolean;
+Description:
+
+  Preforms the fishing, uses all the other mentioned fishing functions.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Function Fish: Boolean;
+
+Var
+   x, y, FishTime, MyTime, RotateTime, RotateNum, FishCount: Integer;
+Begin
+  If Not LoggedIn Then Exit;
+  FindNormalRandoms;
+  If FindFishingSpot(x, y) Then
+  Begin
+    RotateNum := 15000 + Random(20000);
+    If Not FindWhirlPool(x, y) Then
+    Begin
+      Mouse(x, y, 0, 0, True);
+      FishTime := GetSystemTime;
+      RotateTime := GetSystemTime;
+      Result := True;
+      Repeat
+
+        If FindWhirlpool(x, y) Then
+        Begin
+          Mouse(648, 84, 4, 4, True);
+          Wait(100);
+          WriteLn('Whirlpool found.');
+          Inc(Whirlpools);
+          Break;
+        End;
+
+        If Not RealFollowSpot(x, y) Then
+          Break;
+        MyTime := GetSystemTime - FishTime;
+        Wait(200);
+
+        If MyTime > 5000 Then
+        Begin
+          If Not LoggedIn Then Exit;
+          FindRod;
+          Wait(100);
+{          If GetSystemTime - RotateTime > RotateNum Then
+          Begin
+            RotateAndFollow(x, y, 400 + Random(400));
+            RotateNum := 15000 + Random(20000);
+            RotateTime := GetSystemTime;
+          End;     }
+          If InvFull Then
+            Break;
+          Wait(100);
+          If Not FindFeather Then
+            Break;
+          If Not Fishing(x, y) Then
+            Inc(FishCount)
+          Else
+            FishCount := 0;
+          If FishCount > 25 Then
+            Break;
+          If FindFight Then
+            HandleFight;
+          Wait(15);
+          If MyTime > 60000 Then
+            Break;
+          If MyTime Mod 1000 < 200 Then
+            FindNormalRandoms;
+        End;
+
+      Until False;
+    End;
+  End
+  Else WriteLn('No Fishing Spot');
+End;
+
+{
+<----------------------------------------------------------------->
+Procedure Bank;
+Description:
+
+  Banks and Counts all items.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Procedure Bank;
+
+Var
+   x, y, Tries, i: Integer;
+   T, S: TIntegerArray;
+   countInv: InvFoodAr;
+
+Begin
+  If Not LoggedIn Then Exit;
+  Repeat
+    OpenBankFast('eb');
+    Tries := Tries + 1;
+  Until ((BankScreen) Or (Tries > 9));
+
+  If Not BankScreen Then
+    OpenBankQuiet('eb');
+
+  SetLength(countInv, 0);
+  SetLength(countInv, 28);
+  countInv := GetFullInv;
+
+  If BankScreen Then
+  Begin
+    If Not BankScreen Then Exit;
+    T := GetFoodCount('Trout', Raw, countInv);
+    S := GetFoodCount('Salmon', Raw, countInv);
+
+    ReportVars[0] := Length(T);
+    ReportVars[1] := Length(S);
+    Trouts := Trouts + Length(T);
+    Salmons := Salmons + Length(S);
+
+    ClickAllItems(FoodArray[3].FoodBMP.Raw, 'bmp', 'All', 1000, [30]);
+    ClickAllItems(FoodArray[4].FoodBMP.Raw, 'bmp', 'All', 1000, [30]);
+    Deposit(3, 28, True);
+
+    If NoRod Then
+    Begin
+      FixBank;
+      Wait(1000);
+      For I := 0 To High(FishRodColors) Do
+        If FindColor(x, y, FishRodColors[i], MSX1, MSY1, MSX2, MSY2) Then
+        Begin
+          MMouse(x, y, 2, 2);
+          GetMousePos(x, y);
+          Wait(100);
+          If IsUpText('ish') Then
+            Mouse(x, y, 0, 0, True);
+          Wait(100);
+          Break;
+        End;
+      NoRod := False;
+    End;
+  End;
+  CloseBank;
+  Players[CurrentPlayer].Banked := Players[CurrentPlayer].Banked + 1;
+  Banks := Banks + 1;
+  ReportVars[3] := ReportVars[3] + 1;
+End;
+
+{
+<----------------------------------------------------------------->
+Procedure PlayerReport;
+Description:
+
+  Prints out a small, handsome report per player.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Procedure PlayerReport;
+
+Var
+  Active: string;
+  I: Integer;
+
+Begin
+  For I := 0 To HowManyPlayers - 1 Do
+  Begin
+    If Players[i].Active = True Then
+      Active := 'T'
+    Else
+      Active := 'F';
+    WriteLn((IntToStr(I)) + ' : ' + Players[I].nick + ' = ' +
+    Active + '; Loc: ' + Players[I].Loc+ '; R: ' + Players[I].Rand + '; B: '+
+    IntToStr(Players[i].Banked)+ ' F lvl: ' +
+    IntToStr(Players[I].Level[17])+ '; T: '
+    + IntToStr(Players[i].Worked));
+  End;
+End;
+
+{
+<----------------------------------------------------------------->
+Procedure ProgressReport;
+Description:
+
+  Prints out the global report.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Procedure ProgressReport;
+
+Var
+   Sec, RateT, RateS, RateToT: Integer;
+
+Begin
+  writeln('----------------------------');
+  writeln('');
+  Sec := GetTimeRunning div 1000+1;
+  RateT:= 3600 * Trouts / Sec;     // by mastaraymond.
+  RateS := 3600 * Salmons / Sec;
+  RateToT := 3600 * (Trouts + Salmons) / Sec;
+  writeln('Wizzup Edgeville Fly Fisher.');
+  writeln('');
+  writeln('Worked for '+ TimeRunning);
+  If Banks > 0 Then writeln('Banked '+IntToStr(Banks)+' times, fishing at a rate of ' + IntToStr(RateToT) + ' Fish P/H and ' + IntToStr(RateT * 50 + RateS * 70) + 'xp P/H.');
+  If Trouts > 0 Then writeln('Trout caught: ' +IntToStr(Trouts)+ ', at a rate of ' + IntToStr(RateT) + ' p/h');
+  If Salmons > 0 Then writeln('Salmons caught: ' +IntToStr(Salmons)+', at a rate of ' + IntToStr(RateS) + ' p/h');
+  If Rods > 0 Then writeln('Fly Rods picked up ' + IntToStr(Rods)+'.');
+  writeln('');
+  writeln('----------------------------');
+  PlayerReport;
+  writeln('');
+  writeln('----------------------------');
+  SRLRandomsReport;
+End;
+
+{
+<----------------------------------------------------------------->
+Procedure Bitmaps;
+Description:
+
+  Declares global bitmaps.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Procedure Bitmaps;
+
+Begin
+  Feather := BitmapFromString(8, 7, 'beNpbufL4/v3H9u0FIgYGxqN' +
+       '79hzevWvHunXb16yBCAJF4IIQhCwIVwxEWAW3rV4FF2TVZEMWB1qH' +
+       'KQhEcMXIglsAgUluBg==');
+  FishingRod := BitmapFromString(4, 6, 'z78DA65CD510A80300C03' +
+       'D02B654BBAD6DF31BDFF919CD67DA82994F028B485766CB852883' +
+       'A27BB3A6379EE801D187F7118DF9EA24A3C29C136C565FEB9BC45' +
+       '4E5BBF4E24CC1CC5');
+  BankDTM := DTMFromString('78DA632C636260B0654001FFFEFD63F80FA41' +
+       '981F83F1030D603D5D841E498A06ADEBE65601081AA0101C606A0' +
+       '8C19116AF408A86905CA68E15703005601134D');
+End;
+
+{
+<----------------------------------------------------------------->
+Procedure DoChats;
+Description:
+
+  Set's the RuneScape chat to the script's standard chat.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Procedure DoChats;
+
+Begin
+  SetChat('on',1);
+  SetChat('on',1);
+  SetChat('friends',2);
+  SetChat('friends',2);
+  SetChat('friends',3);
+  SetChat('friends',3);
+End;
+
+{
+<----------------------------------------------------------------->
+Procedure ClearVars;
+Description:
+
+  Set's all the ReportVars (for SRL-STATS) to 0.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Procedure ClearVars;
+
+Var
+  I : Integer;
+Begin
+  For I := 0 To 19 Do
+    ReportVars[I] := 0;
+End;
+
+{
+<----------------------------------------------------------------->
+Procedure SetupScript;
+Description:
+
+  Calls all nessecairy functions.
+
+  Made By: Wizzup?
+<----------------------------------------------------------------->
+}
+
+Procedure SetupScript;
+
+Begin
+  LoadFishArray;
+  ScriptID := '124';
+  SRLID := YourSRLID;
+  SRLPassword := YourSRLPASS;
+  RCLoc := 'Bank';
+  RCMaster := RemoteControlMasterNickName;
+  DeclarePlayers;
+  Bitmaps;
+  ClearVars;
+  WhirlPoolAcc := 1.0;
+  LoginPlayer;
+  NoRod := False;
+  CallBTime := GetSystemTime;
+  DoChats;
+  SetAngle(True);
+  WaterColor := w_GetWaterColor;
+  WriteLn('WaterColor: ' + IntToStr(WaterColor));
+End;
+
+begin
+  Smartsetup(SmartPrefix, true, true, false);
+  SetTargetDC(SmartGetDC);
+
+  ClearDebug;
+  ColorToleranceSpeed(1);
+  SetupSRL;
+  SymbolAccuracy := 0.6;
+  SetupScript;
+
+  Wait(1000);
+  Repeat
+    If Players[CurrentPlayer].Loc = 'Bank' Then
+    Begin
+      WriteLn('Going to fishing Spot');
+      MakeCompass('N');
+      If Not IsFishRod Then
+      Begin
+        WriteLn('No Rod..Logging out.');
+        Wait(2000);
+        LogOut;
+        Players[CurrentPlayer].Loc := 'NoRod';
+        WriteLn('No Rod');
+      End;
+      If Not IsFeather Then
+      Begin
+        WriteLn('No Feathers..Logging out.');
+        Wait(2000);
+        LogOut;
+        Players[CurrentPlayer].Loc := 'NoFeather';
+        WriteLn('No Feather');
+      End;
+      If LoggedIn Then ToFish;
+    End;
+
+    If Players[CurrentPlayer].Loc = 'Fishing' Then
+    Begin
+      LTime := GetSystemTime;
+      Repeat
+        If GetSystemTime - LTime > LoadsTime * 60000 Then
+          Break;
+        FindRod;
+        If NoRod Then
+          Break;
+        If NoFeather Then
+          Break;
+        FindNormalRandoms;
+        If Not LoggedIn Then
+          Break;
+        If FindFight Then
+          HandleFight;
+        If Not Fish Then Callibrate;
+        Wait(2000);
+      Until InvFull;
+      If LoggedIn Then
+      Begin
+        GetAllLevels;
+        ToBank;
+        Bank;
+      End;
+      If IsFishRod Then NoRod := False;
+    End;
+
+    If LoggedIn And (Players[CurrentPlayer].Banked Mod Loads = 0 ) Then
+    Begin
+      MarkTime(MyMark);
+      SetChat('off',1);
+    {  Repeat
+        FindNormalRandoms;
+        Wait(10);
+        If TimeFromMark(MyMark) > 240000 Then Begin Logout; Break; End;
+      Until Not LoggedIn;     }
+      Logout;
+      NextPlayer(True);
+      GetAllLevels;
+      DoChats;
+      NoRod :=False;
+    End;
+
+    If Not LoggedIn Then
+    Begin
+      NextPlayer(False);
+      GetAllLevels;
+      DoChats;
+      NoRod := False;
+    End;
+
+  ProgressReport;
+
+  Until False;
+  FreeBitmap(Feather);
+  FreeBitmap(FishingRod);
+  FreeDTM(BankDTM);
+end.

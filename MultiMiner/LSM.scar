@@ -1,0 +1,252 @@
+function RadialWalkOff(TheColor, StartRadial, EndRadial, Radius, FlagBreak, Xmod, Ymod, xoff, yoff, Waitsecs: Integer): Boolean;
+var
+  tpa: TPointArray;
+  i: Integer;
+begin
+  Result := False;
+  if RadialWalkEx(tpa, MMCX, MMCY, TheColor, 0, StartRadial, EndRadial, Radius) then
+    for i := 0 to High(tpa) do
+      if MFNF(tpa[i].x + xoff, tpa[i].y + yoff, Xmod, Ymod) then
+      begin
+        Wait(WaitSecs * 1000);
+        FFlag(FlagBreak);
+        Result := True;
+        Break;
+      end;
+end;
+
+Function ClickDTMRotated(TheDTM:Integer):Boolean;
+var
+
+   WhichAngle: ExtEnded;
+   FBx, FBy: Integer;
+
+begin
+  If FindDtmRotated(TheDTM, FBx, FBy, MMX1, MMY1, MMX2, MMY2,
+      Radians(-30), Radians(30), 0.5, WhichAngle) Then
+  begin
+   If rs_onMiniMap(FBx, FBy) Then
+   begin
+      Mouse(FBx, FBy, 0, 0, True);
+      FTWait(4);
+      FFlag(0);
+      Result := True;
+   End;
+  End;
+End;
+
+//----------------------------------------------------------------------------//
+
+Function ClickColorSpiral(CenterX, CenterY, Color, Xoff, Yoff, Pause:Integer):Boolean;
+begin
+  if FindColorSpiral(CenterX, CenterY, Color, MMX1, MMY1, MMX2, MMY2) Then
+  begin
+    MFF(CenterX + Xoff, CenterY + Yoff, 1, -1);
+    FTWait(4);
+    Wait(Pause);
+    FFlag(0);
+    FindNormalRandoms;
+    Result:=True;
+  end;
+end;
+
+//----------------------------------------------------------------------------//
+
+Procedure LSM_ToMine;
+var
+   MSx, MSy, Mark :Integer;
+begin
+  MakeCompass('N');
+  RadialWalkOff(WaterColor, 50, 230, 75, (10 + Random(10)), 10, -(20 - Random(15)), -1, 1, 6);
+
+  MarkTime(Mark);
+  Repeat
+    RadialWalkOff(WaterColor, 50, 230, 60, (10 + Random(10)), 10, -(20 - Random(15)), -1, 1, 5);
+    If Not Loggedin Then
+    Begin
+      Location_Debug('LSM_ToMine - Not LoggedIn');
+      Break;
+    End;
+   If (TimeFromMark(Mark) > 360000) Then
+   Begin
+     Location_Debug('LSM_ToBank - TimeFromMark > 360000');
+     Players[CurrentPlayer].Loc := 'LSM_ToMine, Timer';
+     Logout;
+     Exit;
+   End;
+   Wait(50);
+  Until FindColor(MSx, MSy, srl_AutoGetColor('mining spot'), MMX1, MMy1, MMX2, MMY2) or FindColorSpiralTolerance(MSx, MSy, srl_autogetcolor('brown rock'),  MMX1, MMY1, MMX2, MMY2, 0);
+
+  RadialWalkOff(WaterColor, 130, 220, 30, (10 + Random(10)), 10, -(20 - Random(15)), -1, 1, 5);
+
+  if MiddleOfMine(MSx, MSy) then
+  begin
+    Mouse(MSx, MSy, 2, 2, True);
+    FTWait(4);
+    Wait(4000 + Random(1000));
+    FFlag(0);
+  end
+  else If FindColor(MSx, MSy, srl_AutoGetColor('mining spot'), MMX1, MMy1, MMX2, MMY2) Then
+  begin
+   Mouse(MSx, MSy ,0 ,0 ,True);
+   FFlag(0);
+  end;
+    
+  Players[CurrentPlayer].Loc := 'Mine';
+  SetRun(True);
+  MakeCompass('60');
+End;
+
+//----------------------------------------------------------------------------//
+
+Procedure LSM_ToBank;
+var
+  Bx, By, Mark3, i:integer;
+  BankColors: TIntegerArray;
+  B: Boolean;
+begin
+  MakeCompass('N');
+  SetRun(False);
+  RadialWalkOff(WaterColor, 420, 240, 60, ( 10 + Random( 10 ) ), 10, -( 20 - Random( 15 ) ), 1, 1, 9);
+  BankColors := srl_AutoGetColors('bank');
+  MarkTime(Mark3);
+  repeat
+     If Not Loggedin Then
+     Begin
+       Location_Debug('LSM_ToBank - Not LoggedIn');
+       Break;
+     End;
+     wait(100);
+     If ( TimeFromMark( Mark3 ) > 180000 ) Then
+     Begin
+       Location_Debug('LSM_ToBank - TimeFromMark > 180000');
+       Players[CurrentPlayer].Loc := 'LSM_ToBank, Timer';
+       Logout;
+       Exit;
+     End;
+     RadialWalkOff(WaterColor,  420, 240, 60, ( 10 + Random( 10 ) ), 10, -( 20 - Random( 15 ) ), 1, 1, 5 );
+     Wait(50);
+     B := False;
+     For I := 0 To High(BankColors) Do
+       If FindColor(Bx, By, BankColors[I], MMx1, MMy1, MMx2, MMy2) Then
+       Begin
+         B := True;
+         WriteLn('Found ' + IntToStr(BankColors[I]));
+         Break;
+       End;
+     If B Then
+       Break;
+   //until ClickDTMRotated(Locations[1].LocalVars[0].Value);
+   until False;
+   For I := 0 To High(BankColors) Do
+     If FindColor(Bx, By, BankColors[I], MMx1, MMy1, MMx2, MMy2) Then
+     begin
+       Mouse(Bx, By, 2, 2, True);
+       FTWait(4);
+       Wait(3000 + Random(1000));
+       FFlag(0);
+       Break;
+     end;
+   
+   MakeCompass('N');
+   FFlag(0);
+   FTWait(4);
+   ClickDTMRotated(Locations[1].LocalVars[0].Value);
+   Players[CurrentPlayer].Loc := 'Bank';
+End;
+
+Function LSM_OpenBank: Boolean;
+
+Begin
+  Result := True;
+  If Not OpenBankFast('db') Then
+   If not OpenBankQuiet('db') Then
+   Begin
+     Location_Debug('No MainScreen Bank');
+     LogOut;
+     Players[CurrentPlayer].Loc := 'NoMSBank';
+     Result := False;
+   End;
+End;
+
+Procedure LSM_SetOreColor;
+
+Begin
+  Case LowerCase(Players[CurrentPlayer].Strings[0]) Of
+    'adamant':
+    Begin
+      Case Random(3) Of
+        0: CurRock := 'coal';
+        1: CurRock := 'mithril';
+        2: CurRock := 'adamant';
+      End;
+    End;
+    'mithril':
+    Begin
+      Case Random(2) Of
+        0: CurRock := 'coal';
+        1: CurRock := 'mithril';
+      End;
+    End;
+    'coal': CurRock := 'coal';
+  End;
+End;
+
+Function LSM_SetCallibrateTimer: Boolean;
+
+Begin
+  Result := True;
+  Try
+    Locations[1].LocalVars[1].Value := GetSystemTime;
+  Except
+    Result := False;
+  End;
+End;
+
+Function LSM_Callibrate: Boolean;
+
+Begin
+  If GetSystemTime - Locations[1].LocalVars[1].Value > 30000 Then
+  Begin
+    Result := True;
+    //Location_Debug('Now would be a good time to Callibrate');
+    Locations[1].LocalVars[1].Value := GetSystemTime;
+
+    //Callibrate.  grey/brown rock distance
+  End;
+End;
+
+Procedure LSM_Start;
+
+Begin
+  Locations[1].WorkedTimer := GetSystemTime;
+  If WaterColor < 1 Then
+  Begin
+    WaterColor := w_GetWaterColor;
+    Location_Debug('WaterColor: ' + IntToStr(WaterColor));
+  End;
+  If Not Locations[1].LocalVars[0].IsSet Then
+  Begin
+    Locations[1].LocalVars[0].Value := DTMFromString('78DA636C626260F06500032608C5F0EFDF3F8' +
+       '6FF409A1188FF0301632550C60D55CD9F3F101623940F56E34F84' +
+       '9A60026A0A09AB01008AD213E2');
+    Locations[1].LocalVars[0].IsSet := True;
+  End;
+  SymbolAccuracy := 0.6;
+End;
+
+Procedure LSM_Stop;
+
+Begin
+  IncEx(Locations[1].TimeRan, GetSystemTime - Locations[1].WorkedTimer);
+  If Locations[1].LocalVars[0].IsSet Then
+  Begin
+    Try
+      FreeDTM(Locations[1].LocalVars[0].Value);
+    Except
+      WriteLn('Could not free ' + Locations[1].LocalVars[0].Name);
+    End;
+  End;
+  Locations[1].LocalVars[0].IsSet := False;
+  SymbolAccuracy := 0.8;
+End;

@@ -1,0 +1,895 @@
+{$IFDEF MiddleWithNewRock}
+function VEM_IsNewRock(Var rock: tpoint): boolean;
+{$ELSE}
+function VEM_IsNewRock(rock: tpoint): boolean;
+{$ENDIF}
+
+var
+   x1, y1, x2, y2, c, time: integer;
+   Points: Tpointarray;
+
+begin
+  time := getsystemtime;
+  x1 := rock.x - 15;
+  if x1 < 0 then
+    x1 := 0;
+  y1 := rock.y - 15;
+  if y1 < 0 then
+    y1 := 0;
+  x2 := rock.x + 15;
+  if x2 > 515 then
+    x2 := 515;
+  y2 := rock.y + 15;
+  if y2 > 515 then
+    y2 := 515;
+  c := getcolortolerancespeed;
+  ColorToleranceSpeed(2);
+  SetColorspeed2Modifiers(0.1, 0.8);
+  FindColorsTolerance(Points, 1527647, x1, y1, x2, y2, 9);
+  SetColorspeed2Modifiers(0.2, 0.2);
+  ColorToleranceSpeed(c);
+  if length(Points) > 150 then
+  begin
+    Rock := MiddleTPA(Points);
+    Result := True;
+  end;
+end;
+
+
+{$IFDEF MiddleWithNewRock}
+Function LSM_IsNewRock(Var rock: tpoint): Boolean;
+{$ELSE}
+Function LSM_IsNewRock(rock: tpoint): Boolean;
+{$ENDIF}
+
+var
+   x1, y1, x2, y2, c, time: integer;
+   Points: Tpointarray;
+
+begin
+  time := getsystemtime;
+  x1 := rock.x - 15;
+  If x1 < 0 Then
+    x1 := 0;
+  y1 := rock.y - 15;
+  If y1 < 0 Then
+    y1 := 0;
+  x2 := rock.x + 15;
+  If x2 > 515 Then
+    x2 := 515;
+  y2 := rock.y + 15;
+  If y2 > 515 Then
+    y2 := 515;
+  c := getcolortolerancespeed;
+  ColorToleranceSpeed(2);
+  SetColorspeed2ModIfiers(0.2, 0.2);
+  FindColorsTolerance(Points, 4550269, x1, y1, x2, y2, 20);
+  SetColorspeed2ModIfiers(0.2, 0.2);
+  ColorToleranceSpeed(c);
+  If length(Points) > 250 Then
+  begin
+    Rock := MiddleTPA(Points);
+    Result := True;
+  End;
+End;
+
+{$IFDEF MiddleWithNewRock}
+Function RMM_IsNewRock(Var rock: tpoint): Boolean;
+{$ELSE}
+Function RMM_IsNewRock(rock: tpoint): Boolean;
+{$ENDIF}
+
+var
+   x1, y1, x2, y2, c, time: integer;
+   Points: Tpointarray;
+
+begin
+  time := getsystemtime;
+  x1 := rock.x - 15;
+  If x1 < 0 Then
+    x1 := 0;
+  y1 := rock.y - 15;
+  If y1 < 0 Then
+    y1 := 0;
+  x2 := rock.x + 15;
+  If x2 > 515 Then
+    x2 := 515;
+  y2 := rock.y + 15;
+  If y2 > 515 Then
+    y2 := 515;
+  c := getcolortolerancespeed;
+  colortolerancespeed(3);
+  SetColorspeed3Modifiers(10);
+  FindColorsTolerance(Points, 1137541, x1, y1, x2, y2, 2);
+  SetColorspeed3Modifiers(4);
+  ColorToleranceSpeed(c);
+  If length(Points) > 60 Then
+  begin
+    Rock := MiddleTPA(Points);
+    Result := True;
+  End;
+End;
+
+{$IFDEF MiddleWithNewRock}
+Function CGM_IsNewRock(Var T: TPoint): Boolean;
+{$ELSE}
+Function CGM_IsNewRock(T: TPoint): Boolean;
+{$ENDIF}
+
+Var
+   Points: TPointArray;
+   C: TIntegerArray;
+
+Begin
+  SetColorSpeed2Modifiers(0.03, 0.07);
+  ColorToleranceSpeed(2);
+  FindColorsTolerance(Points, 3037029, t.x - 20, t.y - 20,
+  t.x + 20, t.y + 20, 8);
+
+  C := GetColors(Points);
+  ClearSameIntegers(C);
+  If Length(C) > 10 Then
+  Begin
+    Result := True;
+    T := MiddleTPA(Points);
+    //DrawTPACanvas(Points, clWhite, GetDebugCanvas);
+  End;
+End;
+
+Function FindGold: TPointArray;
+
+Begin
+  SetColorSpeed2Modifiers(0.02, 0.48);
+  ColorToleranceSpeed(2);
+  FindColorsTolerance(Result, 958666, 3, 3, 515, 336, 20);
+ { aTPA := TPAToATPA(Points, 25);
+
+  DrawaTPACanvas(aTPA, 255, GetDebugCanvas);
+  For I := 0 To High(aTPA) Do
+  Begin
+    T := MiddleTPA(aTPA[I]);
+    IsNewRock(T.X, T.Y);
+  End;    }
+End;
+
+function findCoal: tpointarray;
+
+var
+  atpa: T2DPointArray;
+  i: integer;
+
+begin
+  colortolerancespeed(2);
+  SetColorspeed2Modifiers(0.01, 0.1);
+  findcolorsspiraltolerance(270, 180, result, 2571067, 3, 3, 515, 336, 20);
+  SetColorspeed2ModIfiers(0.2, 0.2);
+  atpa := tpatoatpaex(result, 20, 20);
+  setlength(result, 0);
+  for i := 0 to high(atpa) do
+  begin
+    If length(atpa[i]) < 5 Then
+      continue;
+    setlength(result, length(result) + 1);
+    result[high(result)] := middletpa(atpa[i]);
+  End;
+End;
+
+//----------------------------------------------------------------------------//
+
+function followCoal(var rock: tpoint): boolean;
+
+var
+   x1, y1, x2, y2, c: integer;
+   Points: Tpointarray;
+
+begin
+  x1 := rock.x - 20;
+  If x1 < 0 Then
+    x1 := 0;
+  y1 := rock.y - 20;
+  If y1 < 0 Then
+    y1 := 0;
+  x2 := rock.x + 20;
+  If x2 > 515 Then
+    x2 := 515;
+  y2 := rock.y + 20;
+  If y2 > 515 Then
+    y2 := 515;
+  c := getcolortolerancespeed;
+  ColorToleranceSpeed(2);
+  SetColorspeed2Modifiers(0.01, 0.1);
+  FindColorsTolerance(Points, 2571067, x1, y1, x2, y2, 20);
+  SetColorspeed2ModIfiers(0.2, 0.2);
+  ColorToleranceSpeed(c);
+  If length(Points) > 5 Then
+  begin
+    Rock := MiddleTPA(Points);
+    Result := True;
+  End;
+End;
+
+//----------------------------------------------------------------------------//
+
+function findMithril: tpointarray;
+
+var
+  atpa: T2DPointArray;
+  i: integer;
+
+begin
+  colortolerancespeed(2);
+  SetColorspeed2Modifiers(0.01, 0.1);
+  findcolorsspiraltolerance(270, 180, result, 5519416, 3, 3, 515, 336, 25);
+  SetColorspeed2ModIfiers(0.2, 0.2);
+  atpa := tpatoatpaex(result, 20, 20);
+  setlength(result, 0);
+  for i := 0 to high(atpa) do
+  begin
+    If length(atpa[i]) < 5 Then
+      continue;
+    setlength(result, length(result) + 1);
+    result[high(result)] := middletpa(atpa[i]);
+  End;
+End;
+
+//----------------------------------------------------------------------------//
+
+function followMithril(var rock: tpoint): boolean;
+
+var
+   x1, y1, x2, y2, c: integer;
+   Points: Tpointarray;
+
+begin
+  x1 := rock.x - 20;
+  If x1 < 0 Then
+    x1 := 0;
+  y1 := rock.y - 20;
+  If y1 < 0 Then
+    y1 := 0;
+  x2 := rock.x + 20;
+  If x2 > 515 Then
+    x2 := 515;
+  y2 := rock.y + 20;
+  If y2 > 515 Then
+    y2 := 515;
+  c := getcolortolerancespeed;
+  ColorToleranceSpeed(2);
+  SetColorspeed2Modifiers(0.01, 0.1);
+  FindColorsTolerance(Points, 5519416, x1, y1, x2, y2, 30);
+  SetColorspeed2ModIfiers(0.2, 0.2);                  //tol was 25.
+  ColorToleranceSpeed(c);
+  If length(Points) > 5 Then
+  begin
+    Rock := MiddleTPA(Points);
+    Result := True;
+  End;
+End;
+
+//----------------------------------------------------------------------------//
+
+function findAdamant: tpointarray;
+
+var
+  atpa: T2DPointArray;
+  i: integer;
+
+begin
+  colortolerancespeed(2);
+  SetColorspeed2Modifiers(0.01, 0.1);
+  findcolorsspiraltolerance(270, 180, result, 4544324, 3, 3, 515, 336, 25);
+  SetColorspeed2ModIfiers(0.2, 0.2);
+  atpa := tpatoatpaex(result, 20, 20);
+  setlength(result, 0);
+  for i := 0 to high(atpa) do
+  begin
+    If length(atpa[i]) < 5 Then
+      continue;
+    setlength(result, length(result) + 1);
+    result[high(result)] := middletpa(atpa[i]);
+  End;
+End;
+
+//----------------------------------------------------------------------------//
+
+function followAdamant(var rock: tpoint): boolean;
+
+var
+   x1, y1, x2, y2, c: integer;
+   Points: Tpointarray;
+
+begin
+  x1 := rock.x - 20;
+  If x1 < 0 Then
+    x1 := 0;
+  y1 := rock.y - 20;
+  If y1 < 0 Then
+    y1 := 0;
+  x2 := rock.x + 20;
+  If x2 > 515 Then
+    x2 := 515;
+  y2 := rock.y + 20;
+  If y2 > 515 Then
+    y2 := 515;
+  c := getcolortolerancespeed;
+  ColorToleranceSpeed(2);
+  SetColorspeed2Modifiers(0.01, 0.1);
+  FindColorsTolerance(Points, 4544324, x1, y1, x2, y2, 25);
+  SetColorspeed2ModIfiers(0.2, 0.2);
+  ColorToleranceSpeed(c);
+
+  If length(Points) > 5 Then
+  begin
+    Rock := MiddleTPA(Points);
+    Result := True;
+  End;
+End;
+
+function findIron: tpointarray;
+
+var
+  atpa: T2DPointArray;
+  points: tpointarray;
+  i, c: integer;
+
+begin
+  c := GetColorToleranceSpeed;
+  colortolerancespeed(2);
+  SetColorspeed2Modifiers(0.01, 0.1);
+  //findcolorsspiraltolerance(270, 180, points, 2898781, 3, 3, 515, 336, 50);
+
+  findcolorsspiraltolerance(270, 140, points, 2898781, 3, 3, 515, 336, 50);
+  {y less, so we will hopefully stay at the upper 3 rocks most of the time}
+  ColorToleranceSpeed(c);
+  SetColorspeed2Modifiers(0.2, 0.2);
+  atpa := tpatoatpaex(points, 30, 30);
+  for i := 0 to high(atpa) do
+  begin
+    if length(atpa[i]) < 5 then
+      continue;
+    setlength(result, length(result) + 1);
+    result[high(result)] := middletpa(atpa[i]);
+  end;
+end;
+
+function followIron(var rock: tpoint): boolean;
+
+var
+   x1, y1, x2, y2, c: integer;
+   Points: TPointarray;
+
+begin
+//  x1 := rock.x - 20;
+  x1 := rock.x - 15;
+  if x1 < 0 then
+    x1 := 0;
+//  y1 := rock.y - 20;
+  y1 := rock.y - 15;
+  if y1 < 0 then
+    y1 := 0;
+//  x2 := rock.x + 20;
+  x2 := rock.x + 15;
+  if x2 > 515 then
+    x2 := 515;
+//  y2 := rock.y + 20;
+  y2 := rock.y + 15;
+  if y2 > 515 then
+    y2 := 515;
+  c := getcolortolerancespeed;
+  ColorToleranceSpeed(2);
+  SetColorspeed2Modifiers(0.01, 0.1);
+  FindColorsTolerance(Points, 2898781, x1, y1, x2, y2, 50);
+  SetColorspeed2Modifiers(0.2, 0.2);
+  ColorToleranceSpeed(c);
+  if length(Points) > 5 then
+  begin
+    Rock := MiddleTPA(Points);
+    Result := True;
+  end;
+end;
+
+function findCopper: tpointarray;
+
+var
+  atpa: T2DPointArray;
+  points: tpointarray;
+  time, i, cts: integer;
+  colors: tintegerarray;
+  x, y, z, h, s, l: extended;
+
+begin
+  cts := getcolortolerancespeed;
+  colortolerancespeed(2);
+  SetColorspeed2Modifiers(0.05, 0.2);
+  time := getsystemtime;
+  findcolorsspiraltolerance(270, 180, points, 5011106, 3, 3, 515, 336, 25);
+  SetColorspeed2Modifiers(0.2, 0.2);
+  colors := getcolors(points);
+  for i := 0 to high(points) do
+  begin
+    colortoxyz(colors[i], x, y, z);
+    if abs(x-y) < 3 then
+      if z < 10.0 then
+      begin
+        colortohsl(colors[i], h, s, l);
+        if (s > 35) and (s < 38) and (h > 7) and (h < 9)then
+        begin
+          setlength(result, length(result) + 1);
+          result[high(result)] := points[i];
+        end;
+      end;
+  end;
+  atpa := tpatoatpaex(result, 25, 25);
+  setlength(result, 0);
+  for i := 0 to high(atpa) do
+  begin
+    if length(atpa[i]) < 5 then
+      continue;
+    setlength(result, length(result) + 1);
+    result[high(result)] := middletpa(atpa[i]);
+  end;
+  colortolerancespeed(cts);
+end;
+
+function followCopper(var rock: tpoint): boolean;
+
+var
+   x1, y1, x2, y2, i, c: integer;
+   x, y, z, h, s, l: extended;
+   Points, Points2: Tpointarray;
+   colors: Tintegerarray;
+
+begin
+  x1 := rock.x - 20;
+  if x1 < 0 then
+    x1 := 0;
+  y1 := rock.y - 20;
+  if y1 < 0 then
+    y1 := 0;
+  x2 := rock.x + 20;
+  if x2 > 515 then
+    x2 := 515;
+  y2 := rock.y + 20;
+  if y2 > 515 then
+    y2 := 515;
+  c := getcolortolerancespeed;
+  ColorToleranceSpeed(2);
+  SetColorspeed2Modifiers(0.05, 0.2);
+  FindColorsTolerance(Points, 5011106, x1, y1, x2, y2, 25);
+  SetColorspeed2Modifiers(0.2, 0.2);
+  ColorToleranceSpeed(c);
+  colors := getcolors(points);
+  for i := 0 to high(points) do
+  begin
+    colortoxyz(colors[i], x, y, z);
+    if abs(x-y) < 3 then
+      if z < 10.0 then
+      begin
+        colortohsl(colors[i], h, s, l);
+        if (s > 35) and (s < 38) and (h > 7) and (h < 9)then
+        begin
+          setlength(Points2, length(Points2) + 1);
+          Points2[high(Points2)] := points[i];
+        end;
+      end;
+  end;
+  if length(Points2) > 5 then
+  begin
+    Rock := MiddleTPA(Points2);
+    Result := True;
+  end;
+end;
+
+function findTin: tpointarray;
+
+var
+  atpa: T2DPointArray;
+  points: tpointarray;
+  time, cts, i, r, g, b: integer;
+  colors: tintegerarray;
+  x, y, z, h, s, l: extended;
+
+begin
+  cts := getcolortolerancespeed;
+  colortolerancespeed(2);
+  SetColorspeed2Modifiers(0.2, 0.2);
+  time := getsystemtime;
+  findcolorsspiraltolerance(270, 180, points, 10132390, 3, 3, 515, 336, 30);
+  colors := getcolors(points);
+  for i := 0 to high(points) do
+  begin
+    colortorgb(colors[i], r, g, b);
+    if (abs(g - b) < 3) and (abs(r - g) < 15) then
+    begin
+      colortoxyz(colors[i], x, y, z);
+      if (abs(x - y) < 5) and (abs(x - z) < 5) and (abs(y - z) < 5) then
+      begin
+        colortohsl(colors[i], h, s, l);
+        if h < 5.0 then
+        begin
+          setlength(result, length(result) + 1);
+          result[high(result)] := points[i];
+        end;
+      end;
+    end;
+  end;
+  atpa := tpatoatpaex(result, 25, 25);
+  setlength(result, 0);
+  for i := 0 to high(atpa) do
+  begin
+    if length(atpa[i]) < 5 then
+      continue;
+    setlength(result, length(result) + 1);
+    result[high(result)] := middletpa(atpa[i]);
+  end;
+  colortolerancespeed(cts);
+end;
+
+
+function followTin(var rock: tpoint): boolean;
+
+var
+   x1, y1, x2, y2, i, c, r, g, b: integer;
+   x, y, z, h, s, l: extended;
+   Points, Points2: Tpointarray;
+   colors: Tintegerarray;
+
+begin
+  x1 := rock.x - 20;
+  if x1 < 0 then
+    x1 := 0;
+  y1 := rock.y - 20;
+  if y1 < 0 then
+    y1 := 0;
+  x2 := rock.x + 20;
+  if x2 > 515 then
+    x2 := 515;
+  y2 := rock.y + 20;
+  if y2 > 515 then
+    y2 := 515;
+  c := getcolortolerancespeed;
+  ColorToleranceSpeed(2);
+  SetColorspeed2Modifiers(0.2, 0.2);
+  FindColorsTolerance(Points, 10132390, x1, y1, x2, y2, 30);
+  ColorToleranceSpeed(c);
+  colors := getcolors(points);
+  for i := 0 to high(points) do
+  begin
+    colortorgb(colors[i], r, g, b);
+    if (abs(g - b) < 3) and (abs(r - g) < 15) then
+    begin
+      colortoxyz(colors[i], x, y, z);
+      if (abs(x - y) < 5) and (abs(x - z) < 5) and (abs(y - z) < 5) then
+      begin
+        colortohsl(colors[i], h, s, l);
+        if h < 5.0 then
+        begin
+          setlength(Points2, length(Points2) + 1);
+          Points2[high(Points2)] := points[i];
+        end;
+      end;
+    end;
+  end;
+  if length(Points2) > 5 then
+  begin
+    Rock := MiddleTPA(Points2);
+    Result := True;
+  end;
+end;
+
+
+function w_GasCheck(GP: TPoint): boolean;
+
+Var
+   x1, y1, x2, y2, I, time, c: Integer;
+   R, G, B: Integer;
+   H, S, L: ExtEnded;
+   X, Y, Z: ExtEnded;
+   Gas, Gas2: TPointArray;
+   Colors, C2: TIntegerArray;
+
+begin
+  Try
+    GP.y := GP.y - 20;  // gas is always ABOVE a rock.
+    x1 := GP.x - 35;
+    If x1 < 0 Then
+      x1 := 0;
+    y1 := GP.y - 35;
+    If y1 < 0 Then
+      y1 := 0;
+    x2 := GP.x + 35;
+    If x2 > 515 Then
+      x2 := 515;
+    y2 := GP.y + 35;
+    If y2 > 336 Then
+      y2 := 336;
+    Time := GetSystemTime;
+    Result := False;
+    c := GetColorToleranceSpeed;
+    ColorToleranceSpeed(2);
+    SetColorSpeed2ModIfiers(0.2, 0.2);
+    FindColorsTolerance(Gas, 8886170, x1, y1, x2, y2, 20);
+    ColorToleranceSpeed(c);
+    If length(Gas) < 10 Then
+      Exit;
+    Colors := GetColors(Gas);
+    C2 := Colors;
+    ClearSameIntegers(C2);
+
+    If Length(C2) < 40 Then  // amount of diff colors.
+      Exit;
+    For I := 0 To High(Gas) Do
+    Begin
+      ColorToRGB(Colors[I], R, G, B);
+      If Abs(R - G) <= 10.0 Then
+      Begin
+        ColorToHSL(Colors[I], H, S, L);
+        If (H > 11.5) And (H < 16.0) And (S < 12.0) Then
+        Begin
+          ColorToXYZ(Colors[I], X, Y, Z);
+          If (Abs(X - Y) < 5.0) And (Abs(X - Z) < 5.0) And (Abs(Y - Z) < 5.0) Then
+          Begin
+            SetLength(Gas2, Length(Gas2) + 1);
+            Gas2[High(Gas2)] := Gas[I];
+          End;
+        End;
+      End;
+    End;
+    WriteLn('w_time: ' + IntToStr(GetSystemTime - Time));
+    WriteLn('w_gas2 length: ' + IntToStr(Length(Gas2)));
+    Result := (Length(Gas2) > 20); // The only number you might want to tweak.
+    If Result Then
+    Begin
+      WriteLn('w_GasCheck gave true');
+      WriteFileString(TheFile, '******** FOUND w_GAS RANDOM ********' +
+        Chr(13));
+    End;
+  Except WriteLn('w_gasCheck ERROR: No window selected'); End;
+End;
+
+Function new_GasCheck2(GP: TPoint): Boolean;
+
+Var
+   CTS, I, Le, T, Time: Integer;
+   P, P2: TPointArray;
+   C, C2: TIntegerArray;
+   R, G, B: Integer;
+   H, S, L: Extended;
+   X, Y, Z: Extended;
+
+Begin
+  Result := False;
+
+  Time := GetSystemTime;
+  
+  CTS := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  SetColorSpeed2Modifiers(0.16, 0.46);
+  GP.Y := GP.Y - 20;
+  FindColorsTolerance(P, 9083807, GP.x - 25, GP.y - 25, GP.X + 25, GP.Y + 25, 15);
+  ColorToleranceSpeed(CTS);
+  SetColorSpeed2Modifiers(0.2, 0.2);
+
+  If Length(P) < 60 Then
+    Exit;
+
+  C := GetColors(P);
+  C2 := C;
+  ClearSameIntegers(C);
+
+
+  If Length(C) < 40 Then // Maybe lower the value.
+  //If Length(C) < 60 Then
+  Begin
+    Exit;
+  End;
+  
+  WriteLn('Passed Color Diversity: ' + IntToStr(Length(C)));
+  Writeln('Total different colors found: ' + IntToStr(Length(P)));
+
+  SetLength(C, 0);
+  SetLength(C, Length(C2));
+  SetLength(P2, Length(P));
+  
+  Le := High(C2);
+
+  For I := 0 To Le Do
+  Begin
+    ColorToRGB(C2[I], R, G, B);
+    //If ((R - G) <= 6) And (G - B > 7) Then
+    If ((R - G) <= 10) And (G - B > 7) Then
+    Begin
+      ColorToHSL(C2[I], H, S, L);
+      If (H > 11.5) And (H < 16.0) And (S < 16.0) And (S > 2.0) And (L > 42.0) And (L < 71.0) Then
+      Begin
+        ColorToXYZ(C2[I], X, Y, Z);
+        If (X >= 18.0) And (X <= 45.0) And (Y >= 20.0)
+                       And (Y <= 48.0) And (Z >= 15.0)
+                       And (Z <= 47.0) And (Abs(X - Y) < 3.0)
+                       And (Abs(X - Z) < 5.0) And (Abs(Y - Z) < 6.5)
+                        Then
+        Begin
+          C[T] := C2[I];
+          P2[T] := P[I];
+          T := T + 1;
+        End;
+      End;
+    End;
+  End;
+  SetLength(C, T);
+
+  ClearSameIntegers(C);
+
+
+  //If Length(C) < 30 Then
+  If Length(C) < 25 Then
+  Begin
+    Exit;
+  End;
+  WriteLn('Passed Color Diversity after filtering the colors: ' + IntToStr(Length(C)));
+  Writeln('Total colors found, after filtering: ' + IntToStr(Length(P2)));
+
+
+  Result := True;
+  WriteLn('Gas Gave TRUE');
+  writeln('Time taken: ' + IntToStr(GetSystemTime - Time));
+  
+  //DebugTPA(P2, 'GasFound3 ' + IntToStr(Count));
+  //DrawTPACanvas(P2, 255, GetDebugCanvas);
+End;
+
+function w2_GasCheck(T: TPoint): boolean;
+                  // old rocks.
+Var
+   x1, y1, x2, y2, I, time, c: Integer;
+   R, G, B: Integer;
+   H, S, L: ExtEnded;
+   X, Y, Z: ExtEnded;
+   Gas, Gas2: TPointArray;
+   Colors, C2: TIntegerArray;
+
+begin
+  Try
+    x1 := t.x - 35;
+    If x1 < 0 Then
+      x1 := 0;
+    y1 := t.y - 35;
+    If y1 < 0 Then
+      y1 := 0;
+    x2 := t.x + 35;
+    If x2 > 515 Then
+      x2 := 515;
+    y2 := t.y + 35;
+    If y2 > 336 Then
+      y2 := 336;
+    Time := GetSystemTime;
+    Result := False;
+    c := GetColorToleranceSpeed;
+    ColorToleranceSpeed(2);
+    SetColorSpeed2ModIfiers(0.2, 0.2);
+    FindColorsTolerance(Gas, 6126985, x1, y1, x2, y2, 20);
+    ColorToleranceSpeed(c);
+    If length(Gas) < 10 Then
+      Exit;
+    Colors := GetColors(Gas);
+    C2 := Colors;
+    ClearSameIntegers(C2);
+    writeln('w2_Colors Length: ' + inttostr(length(colors)));
+    writeln('w2_C2 Length: ' + inttostr(length(C2)));
+    If Length(C2) < 40 Then
+      Exit;
+    For I := 0 To High(Gas) Do
+    Begin
+      ColorToRGB(Colors[i], R, G, B);
+      If Abs((R - 10) - G) <= 5.0 Then
+      Begin
+        ColorToHSL(Colors[i], H, S, L);
+        If (H > 10.0) And (H < 18.0) And (S > 12.0) And (S < 22.0) Then
+        Begin
+          ColorToXYZ(Colors[i], X, Y, Z);
+          If (Abs(X - Y) < 3.0) Then
+          Begin
+            SetLength(Gas2, Length(Gas2) + 1);
+            Gas2[High(Gas2)] := Gas[i];
+          End;
+        End
+      End;
+    End;
+    WriteLn('w2_time: ' + IntToStr(GetSystemTime - Time));
+    WriteLn('w2_gas2 length: ' + IntToStr(Length(Gas2)));
+    Result := (Length(Gas2) > 30); // The only number you might want to tweak.
+    //debugtpa(Gas2, '');
+    If Result Then
+      WriteLn('w2_GasCheck OLD ROCK gave true');
+  Except WriteLn('w2_gasCheck ERROR: No window selected'); End;
+End;
+
+{Function FindRocks(oreColor: Integer): TPointArray;
+
+Var
+   aTPA: T2DPointArray;
+   TPA: TPointArray;
+   Cts, I: Integer;
+
+Begin
+  Cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  SetColorSpeed2Modifiers(0.07, 0.84);
+  FindColorsSpiralTolerance(MSCX, MSCY, TPA, oreColor, MSX1, MSY1, MSX2, MSY2, 18);
+  If Length(TPA) > 0 Then
+  Begin
+    aTPA := TPAToATPAEx(TPA, 30, 30);
+    For I := 0 To High(aTPA) Do
+    Begin
+      If Length(aTPA[I]) < 5 Then
+        Continue;
+      SetLength(Result, Length(Result) + 1);
+      Result[High(Result)] := MiddleTPA(aTPA[I]);
+    End;
+  End;
+  ColorToleranceSpeed(Cts);
+  SetColorSpeed2Modifiers(0.2, 0.2);
+End;
+
+Function FindRock(oreColor: Integer): TPointArray;
+
+Var
+   Rocks: TPointArray;
+   I: Integer;
+
+Begin
+  Rocks := FindRocks(oreColor);
+  For I := 0 To High(Rocks) Do
+  Begin
+    If CurrentLocation.MineInfo.HasNewRocks Then
+      If Not CurrentLocation.MineInfo.IsNewRock(Rocks[I]) Then
+        Continue;
+    If CurrentLocation.MineInfo.GasCheck(Rocks[I]) Then
+      Continue;
+    MMouse(Rocks[I].X, Rocks[I].Y, 10, 10);
+    Wait(RandomRange(100, 150));
+    If Not IsUpText('Mine') Then
+      Continue;
+    GetMousePos(Rocks[I].X, Rocks[I].Y);
+    Mouse(Rocks[I].X, Rocks[I].Y, 0, 0, True);
+  End;
+End;     }
+
+function findrocks(rocks: string): tpointarray;
+
+begin
+  case lowercase(rocks) of
+    'tin': result := findTin;
+    'copper': result := findCopper;
+    'iron': result := findIron;
+    'coal': result := findCoal;
+    'mithril': result := findMithril;
+    'adamant': result := findAdamant;
+  End;
+End;
+
+function followrock(Var rock: TPoint; rocks: string): boolean;
+
+begin
+  case lowercase(rocks) of
+    'tin': Result := followTin(rock);
+    'copper': Result := followCopper(rock);
+    'iron': Result := followIron(rock);
+    'coal': Result := followCoal(rock);
+    'mithril': Result := followMithril(rock);
+    'adamant': Result := followAdamant(rock);
+  End;
+End;
+
+function rockseconds(rocks: string): integer;
+
+begin
+  case lowercase(rocks) of // time in seconds you want to wait, per rock.
+  'tin': result := 8;
+  'copper': result := 8;
+  'iron': result := 8;
+  'coal': result := 16;
+  'mithril': result := 20;
+  'adamant': result := 30;
+  End;
+End;

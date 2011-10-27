@@ -1,0 +1,1204 @@
+program New;
+//Essential Essence by Wizzup?
+//Updated by Markus
+{.include smart.scar}
+{.include SRL/SRL.scar}
+{.include srl/srl/misc/NewAutoColor.scar}
+
+Const
+   NumberOfUsers = 4;
+   StartPlayer = 0;
+   Loads = 5;
+   VersionNumber = '2.10';
+   SRL_ID   = '';  // Stats ID.
+   SRL_PASS = ''; // Stats Pass.
+   SmartPrefix = 'world10';
+
+Type
+   EssLoc = Record
+     Name: String;
+     Info: Array Of Array Of Integer;
+     MMClicks, MSEss: TPointArray;
+     L, ReportIDVar: Integer;
+   End;
+   EssLocArray = Array Of EssLoc;
+
+Var
+   EssInfo: EssLocArray;
+   AubTPA: TPointArray;
+   NewAutoColorWorked, NoEssFound: Boolean;
+   EssenceMined, Abyss: Integer;
+
+//{$DEFINE DEBUG}
+
+Procedure DeclarePlayers;
+
+Begin
+  NumberOfPlayers( NumberOfUsers );
+  CurrentPlayer := StartPlayer;
+
+  Players[0].Name :='';
+  Players[0].Pass :='';
+  Players[0].Nick :='';
+  Players[0].Active := True;
+  Players[0].Loc := '';
+  Players[0].Booleans[0]  := True;       // Is The Pick Equipped?
+
+  Players[1].Name :='';
+  Players[1].Pass :='';
+  Players[1].Nick :='';
+  Players[1].Active := True;
+  Players[1].Loc := 'Bank';
+  Players[1].Booleans[0]  := True;       // Is The Pick Equipped?
+
+  Players[2].Name :='';
+  Players[2].Pass :='';
+  Players[2].Nick :='';
+  Players[2].Active := True;
+  Players[2].Loc := 'Bank';
+  Players[2].Booleans[0]  := True;       // Is The Pick Equipped?
+
+  Players[3].Name :='';
+  Players[3].Pass :='';
+  Players[3].Nick :='';
+  Players[3].Active := True;
+  Players[3].Loc := 'Bank';
+  Players[3].Booleans[0]  := True;       // Is The Pick Equipped?}
+
+  Writeln( IntToStr ( HowManyPlayers ) + ' Players' );
+  SetPlayerNameTPAs;
+End;
+
+Procedure FNRWait(ms: Integer);
+
+Var
+   T: Integer;
+Begin
+  T := GetSystemTime;
+  While GetSystemTime - T < ms Do
+  Begin
+    Wait(200);
+    FindNormalRandoms;
+  End;
+End;
+
+Procedure DebugMM(TPA: TPointArray);
+
+Var
+   I, L: Integer;
+   C: TCanvas;
+
+Begin
+  DisplayDebugImgWindow(0, 0);
+  DisplayDebugImgWindow(MMX2-MMX1, MMY2-MMY1);
+  C := GetDebugCanvas;
+  CopyCanvas(GetClientCanvas, C, MMX1, MMY1, MMX2, MMY2, 0, 0, MMX2 - MMX1, MMY2 - MMy1);
+  L := High(tpa);
+  For I := 0 To L Do
+    C.Pixels[tpa[i].x - MMX1, tpa[i].y - MMY1] := 255;
+  DisplayDebugImgWindow(MMX2-MMX1, MMY2-MMY1);
+End;
+
+Function FindMagicSymbol(Var P: TPoint): Boolean;
+
+Var
+   I, J, cts: Integer;
+   Points, P2: TPointArray;
+   aTPA: T2DPointArray;
+   MagicSymbolColors, C: TIntegerArray;
+   H, S, L: Extended;
+
+Begin
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  SetColorSpeed2Modifiers(0.20, 2.0);
+  Result := False;
+  MagicSymbolColors := [2326527, 2925567];
+
+  SetLength(Points, 0);
+  For I := 0 To High(MagicSymbolColors) Do
+  Begin
+    SetLength(P2, 0);
+    SetLength(C, 0);
+    FindColorsTolerance(P2, MagicSymbolColors[I], MMX1, MMY1, MMX2, MMY2, 18);
+    C := GetColors(P2);
+    For J := 0 To High(C) Do
+    Begin
+      ColorToHSL(C[J], H, S, L);
+      //If ((H > 8.5) And (H < 9.5)) Or ((H > 5.5) And (H < 7.5)) Then
+      If (((H > 5.5) And (H < 10.0)) Or (H < 1.0)) And (S > 85.0) Then
+      Begin
+        SetLength(Points, Length(Points) + 1);
+        Points[High(Points)] := P2[J];
+      End;
+    End;
+    //Points := CombineTPA(Points, P2);
+  End;
+  {$IFDEF DEBUG} debugMM(Points); {$ENDIF}
+  ColorToleranceSpeed(cts);
+  aTPA := SplitTPA(Points, 5);
+  SortATPASize(aTPA, True);
+  If Length(aTPA) = 0 Then
+    Exit;
+  Result := Length(aTPA[0]) > 2;
+  P := MiddleTPA(aTPA[0]);
+  If Not Result Then
+    WriteLn('No Aubury Shop');
+End;
+
+Function LevelUp: Boolean;
+
+Begin
+  Result := FindNPCChatText('gratu', Nothing);
+  If Not Result Then
+    Result := FindNPCChatText('atio', Nothing);
+  If Result Then
+  Begin
+    While ClickContinue(True, True) Do
+      Wait(500);
+  End;
+End;
+
+Function FindBankers(Var Bank: TPoint; Var Angle: Extended): Boolean;
+
+Var
+   I: Integer;
+   B, gB: TPointArray;
+   aTPA: T2DPointArray;
+
+Begin
+  Result := False;
+  FindColorsSpiralTolerance(MMCX, MMY2, B, 60909, MMX1, MMY1, MMX2, MMY2, 0);
+  aTPA := SplitTPA(B, 10);
+  SortATPASize(aTPA, True);
+  If Length(aTPA) = 0 Then
+    Exit;
+  B := aTPA[0];
+  For I := 0 To High(B) - 1 Do
+  Begin
+    If (Abs(B[I].Y - B[I + 1].Y) < 15) And (Abs(B[I].X - B[I + 1].X) < 60) Then
+    Begin
+      SetLength(gB, Length(gB) + 1);
+      gB[High(gB)] := B[I];
+      If High(gB) > 3 Then // 4 bankers.
+      Begin
+        Bank := MiddleTPA(gB);
+        Bank.Y := Bank.Y - 5;
+        Angle := Degrees(ArcTan2(gB[0].y - gB[High(gB)].y, gB[0].x - gB[High(gB)].x)) + 90;
+        If Angle < 0 Then
+          Angle := 90 - (Angle * -1) + 270;
+        Result := True;
+        Exit;
+      End;
+    End
+    Else
+      SetLength(gB, 0);
+  End;
+End;
+
+Function Randomize(x, Randomness: Integer): Integer;
+
+Begin
+  Result := RandomRange(X - Randomness, X + Randomness);
+End;
+
+Function AtMine: Boolean;
+
+Var
+   TPA: TPointArray;
+Begin
+  FindColorsTolerance(TPA, 65536, MMX1, MMY1, MMX2, MMY2, 1);
+  Result := Length(TPA) > 2000;
+End;
+
+Function GetUpTextBlue:String;
+
+Begin
+  Result := Trim(GetTextAtEx(7, 7, 140, upchars, true,
+  true, 0, 2, 14277634, 50, True, tr_AllChars));
+End;
+
+Function IsUpTextBlue(Text: String): Boolean;
+
+Begin
+  Result := (Pos(Text, GetUpTextBlue) <> 0)
+End;
+
+Function FindPortal(Var x, y: Integer): Boolean;
+
+Var
+   CTS, I, C: Integer;
+   vPoint: TPoint;
+   Points: TPointArray;
+   aPoints: T2DPointArray;
+   s: String;
+   sa: Array Of String;
+
+Begin
+  Cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  SetColorSpeed2Modifiers(0.40, 1.50);         //    9743280
+  FindColorsSpiralTolerance(MSCX, MSCY, Points, 9481130, MSX1, MSY1, MSX2, MSY2, 10);
+  aPoints := TPAToATPAEx(Points, 40, 40);
+  sa := ['Use', 'Portal', 'ortal', 'se Por'];
+  ColorToleranceSpeed(Cts);
+  For I := 0 To High(aPoints) Do
+  Begin
+    If Length(aPoints[I]) < 40 Then
+      Continue;
+    vPoint := MiddleTPA(aPoints[I]);
+    MMouse(vPoint.X, vPoint.Y, 5, 5);
+    Wait(150);
+    Cts := GetColorToleranceSpeed;
+    ColorToleranceSpeed(2);
+    SetColorSpeed2Modifiers(0.2, 0.2);         //    9743280
+    If CountColorTolerance(14342657, 7, 7, 100, 25, 50) > 100 Then
+    Begin
+      GetMousePos(x, y);
+      Result := True;
+      ColorToleranceSpeed(Cts);
+      Exit;
+    End;
+
+    ColorToleranceSpeed(1);
+    s := rs_GetUpText;
+    For C := 0 To High(sa) Do
+      If Pos(sa[C], s) <> 0 Then
+        Break;
+    If C = Length(sa) Then
+      If Not IsUpTextBlue('ortal') Then
+        Continue;
+    GetMousePos(x, y);
+    Result := True;
+  End;
+  ColorToleranceSpeed(Cts);
+End;
+
+Function DoorClosed: Boolean;
+
+Var
+   TP: TPoint;
+   TPA: TPointArray;
+   aTPA: T2DPointArray;
+   I, c: Integer;
+
+Begin
+  Result := False;
+  c := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  SetColorspeed2Modifiers(0.2, 0.5);
+  FindColorsTolerance(TPA, 5208714, 3, 3, 515, 336, 8);
+  //aTPA := TPAToATPAEx(TPA, 50, 50);
+  aTPA := SplitTPA(TPA, 3);
+  For I := 0 To High(aTPA) Do
+  Begin
+    If Length(aTPA[I]) < 320 Then
+      Continue;
+    TP := MiddleTPA(aTPA[I]);
+    MMouse(TP.X, TP.Y, 0, 0);
+    Wait(200);
+    If IsUpText('pen') And IsUpText('oor') Then
+    Begin
+      Result := True;
+      Mouse(TP.X, TP.Y, 0, 0, True);
+      FFlag(0);
+      Break;
+    End;
+  End;
+  ColorToleranceSpeed(c);
+  SetColorspeed2Modifiers(0.2, 0.2);
+End;
+
+Function FindArrow: Boolean;
+
+Var
+   x, y: Integer;
+Begin
+  Result := False;
+  If NewAutoColorWorked Then
+    If FindColor(x, y, srl_AutoGetColor('transport'), MMX1, MMY1, MMX2, MMY2) Then
+    Begin
+      Result := True;
+      WriteLn('Succesfully used NewAutoColor for FindArrow');
+    End;
+  If Not Result Then
+    If FindSymbol(x, y, 'transportation') Then
+      Result := True;
+  If Result Then
+  Begin
+    Mouse(x, y, 4, 4, True);
+    Wait(1000);
+    FFlag(0);
+    FNRWait(1000);
+  End;
+End;
+
+Procedure BankToAubury;
+
+Var
+   V: TPoint;
+   T: Integer;
+
+Begin
+  FindNormalRandoms;
+  MFNF(Randomize(640, 4), Randomize(140, 4), -1, -1);
+  Wait(10000);
+  T := GetSystemTime;
+  While (GetSystemTime - T < 60000) Do
+  Begin
+    FindNormalRandoms;
+    If FindMagicSymbol(V) Then
+      Break;
+    Wait(500);
+  End;
+  If GetSystemTime - T >= 60000 Then
+  Begin
+    WriteLn('BankToAuburyTime');
+    LogOut;
+    Exit;
+  End;
+  Mouse(V.X, V.Y + 3, 0, 0, True);
+  Wait(500);
+  FFlag(0);
+  Players[CurrentPlayer].Loc := 'Aubury';
+End;
+
+Procedure MineToAubury;
+
+Var
+   x, y, T, T2, I: Integer;
+
+Begin
+  FNRWait(1000);
+
+  T := GetSystemTime;
+  While GetSystemTime - T < 60000 Do
+  Begin
+    If GetSystemTime - T > 30000 Then
+      MakeCompass('E');
+    If Not AtMine Then
+      Break;
+    FindNormalRandoms;
+    If Not FindArrow Then
+    Begin
+      WriteLn('MineToAubury - Could not find the transportation symbol. Exiting');
+      FNRWait(5000);
+      Continue;
+    End;
+    FindNormalRandoms;
+    For I := 0 To 5 Do
+    Begin
+      If FindPortal(x, y) Then
+      Begin
+        Mouse(x, y, 0, 0, True);
+        T2 := GetSystemTime;
+        While AtMine And (GetSystemTime - T2 < 10000) Do
+        Begin
+          //FindTalk;
+          FNRWait(500);
+        End;
+        Break;
+      End;
+      Wait(250);
+    End;
+    FNRWait(1000);
+    FindNormalRandoms;
+  End;
+  If GetSystemTime - T >= 60000 Then
+  Begin
+    //LogOut;
+    WriteLn('No Portal!');
+    LogOut;
+    Exit;
+  End;
+  MakeCompass('N');
+End;
+
+Procedure AuburyToBank;
+
+Var
+   T: Integer;
+   P: TPoint;
+   A: Extended;
+
+Begin
+  T := GetSystemTime;
+  While GetSystemTime - T < 120000 Do
+  Begin
+    FindNormalRandoms;
+    Mouse(665, 30, 8, 8, True);
+    If (FlagDistance < 40) Or (Not FlagPresent)Then
+    Begin
+      Mouse(MMCX, RandomRange(MMCY + 5, MMCY + 15), 4, 0, True);
+      FNRWait(1500);
+      DoorClosed;
+    End
+    Else
+    Begin
+     { T2 := GetSystemTime;
+      While GetSystemTime - T2 < 8000 Do
+      Begin
+        Wait(1000);
+        FindMagicSymbol(P);
+        If Distance(P.x, P.y, MMCX, MMCY) > 30 Then
+          Break;
+      End;
+      FFlag(10);  }
+      FNRWait(8000);
+      FFlag(10);
+      FindMagicSymbol(P);
+      If Distance(P.x, P.y, MMCX, MMCY) > 30 Then
+        Break;
+    End;
+    If Not FindMagicSymbol(P) Then
+      Break;
+    If Distance(P.X, P.Y, MMCX, MMCY) > 30 Then
+      Break;
+  End;
+  WriteLn('Out of shop');
+  FFlag(0);
+  If FindBankers(P, A) Then
+  Begin
+    Mouse(P.x, P.y, 0, 0, True);
+    FNRWait(3000);
+    FFlag(0);
+  End
+  Else
+  If FindSymbol(P.x, P.y, 'Bank') Then
+  Begin
+    Mouse(P.x, P.y, 0, 0, True);
+    FNRWait(3000);
+    FFlag(0);
+  End Else
+  Begin
+    WriteLn('No Bank');
+    LogOut;
+  End;
+  Players[CurrentPlayer].Loc := 'Bank';
+End;
+
+Function FindAuburyText: Boolean;
+var      // FindTalk but modded.
+  TPA,Matches : TPointArray;
+  TempATPA : T2DPointArray;
+  I,CTS,x,y : integer;
+  Box  : TBox;
+
+begin;
+  CTS := GetColorToleranceSpeed;
+  ColorToleranceSpeed(1);
+  FindColorsTolerance(TPA, 65535, 3, 3, 515, 336, 0);
+  if FindTPAinTPA(aubtpa ,TPA,Matches) then  //Length check inside the function ;)
+  For I := 0 to High(Matches) do
+  begin;
+    FindColorsTolerance(TPA,65535,3, Matches[I].y - 1,516,Matches[I].y + 14,0);
+    if High(TPA) < 0 then
+      Continue;
+    TempATPA := FindGapsTPA(TPA,10);
+    if Length(TempATPA) > 1 then
+    begin;
+      SetLength(TPA,Length(TempATPA));
+      For x := 0 to High(TempATPA) do
+      begin;
+        Box := GetTPABounds(TempATPA[x]);
+        TPA[x] := Point((Box.x2 + Box.x1) shr 1, Box.y2);
+      end;
+      SortTPAFrom(TPA,Point(Matches[I].x,Matches[I].y));
+      x := TPA[0].x;
+      y := TPA[0].y;
+    end else
+    begin;
+      Box := GetTPABounds(TempATPA[0]);
+      x := (Box.x2 + Box.x1) shr 1;
+      y := Box.y2;
+    end;
+    y := y + 8;
+    MMouse(x, y, 0, 0);
+    Wait(100 + Random(50));
+    if IsUpTextMultiCustom(['Talk','lk-to']) then
+    begin
+      GetMousePos(x, y);
+      Mouse(x, y, 0, 0, False);
+      Wait(450 + Random(125));
+      If ChooseOption('eleport') Then
+      Begin
+        Result := True;
+        Exit;
+        {$IfDef Debug}writeln('clicked the teleport');{$EndIF}
+      End;
+    end;
+  end;
+  ColorToleranceSpeed(CTS);
+end;
+
+Function FindAubury: Boolean;
+
+Var
+   I, T, cts: Integer;
+   P: TPoint;
+   PA: TPointArray;
+   aPA: T2DPointArray;
+
+Begin
+  Result := False;
+  If FindMagicSymbol(P) Then
+  Begin
+    If (Distance(P.x, P.y, MMCX, MMCY) > 15) Or (Random(20) = 0) Then
+    Begin
+      Mouse(P.x + 3, P.y + 10, 2, 2, True);
+      Wait(1000);
+      FFlag(0);
+    End;
+  End;
+  If FindAuburyText Then
+  Begin
+    Result := True;
+    Exit;
+  End;
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(1);
+  FindColorsTolerance(PA, 2153723, MSX1, MSY1, MSX2, MSY2, 50);
+  //writeln(inttostr(length(pa)));
+  aPA := TPAToATPA(PA, 50);
+  //writeln(inttostr(length(apa)));
+  For I := 0 To High(aPA) Do
+  Begin
+    Wait(200);
+    If AtMine Then
+    Begin
+      Result := True;
+      Break;
+    End;
+    If Length(aPA[I]) < 3 Then
+      Continue;
+    P := MiddleTPA(aPA[I]);
+    MMouse(p.X, P.Y, 3, 3);
+    Wait(250);
+    If Not IsUpText('bury') Then
+      Continue;
+    GetMousePos(P.X, P.Y);
+    Mouse(P.X, P.Y, 0, 0, False);
+    Wait(50);
+    If Not ChooseOption('eleport') Then
+      Continue;
+    T := GetSystemTime;
+    While GetSystemTime - T < 15000 Do
+    Begin
+      Wait(500);
+      If AtMine Or (Not FindMagicSymbol(P)) Then
+        Break;
+    End;
+    Result := GetSystemTime - T < 10500;
+    If AtMine Then
+      Result := True;
+    If Result Then
+      Break;
+  End;
+  ColorToleranceSpeed(cts);
+End;
+
+Function GetCurrentTPA: TPointArray;
+
+Var
+   cts: Integer;
+
+Begin
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(1);
+  FindColorsTolerance(Result, clWhite, MMX1, MMy1, MMX2, MMY2, 421);
+  ColorToleranceSpeed(cts);
+End;
+
+Function ScanMM(Const TPA: TPointArray; SD, ED, MinR, MaxR: Integer): Integer;
+
+Begin
+  FilterPointsPie(TPA, SD, ED, MinR, MaxR, MMCX, MMCY);
+  Result := Length(TPA);
+  {$IFDEF DEBUG} DebugMM(TPA); {$ENDIF}
+End;
+
+Procedure LoadLocations;
+
+Begin
+  SetLength(EssInfo, 6);
+  With EssInfo[0] Do
+  Begin
+    Name := 'North West';
+    Info := [TIntegerArray([80, 160, 60, 70, 400]), TIntegerArray([270, 30, 30, 50, 900])];
+    MSEss := [Point(190, 100)];
+    L := 1;
+    ReportIDVar := 6;
+  End;
+  With EssInfo[1] Do
+  Begin
+    Name := 'Middle North';
+    Info := [TIntegerArray([0, 80, 60, 70, 300]), TIntegerArray([80, 180, 55, 70, 300]),
+    TIntegerArray([170, 260, 60, 70, 190]), TIntegerArray([270, 340, 30, 75, 900])];
+    {Info := [TIntegerArray([0, 80, 60, 70, 320]), TIntegerArray([80, 180, 55, 70, 320]),
+    TIntegerArray([170, 260, 60, 70, 210]), TIntegerArray([270, 340, 30, 75, 1000])];}
+    MMClicks := [Point(670, 35)];
+    MSEss := [Point(370, 30), Point(430, 55)];
+    L := 3;
+    ReportIDVar := 3;
+  End;
+  With EssInfo[2] Do
+  Begin
+    Name := 'Middle South';
+    Info := [TIntegerArray([170, 270, 30, 70, 1700]), TIntegerArray([330, 120, 25, 50, 1700])];
+    MMClicks := [Point(590, 120)];
+    MSEss := [Point(255, 270), Point(150, 175)];
+    L := 1;
+    ReportIDVar := 4;
+  End;
+  With EssInfo[3] Do
+  Begin
+    Name := 'North East';
+    //Info := [TIntegerArray([350, 130, 30, 60, 2000]), TIntegerArray([180, 270, 60, 74, 700])];
+    Info := [TIntegerArray([350, 130, 30, 60, 1500]), TIntegerArray([180, 270, 60, 74, 450])];
+    MSEss := [Point(365, 95)];
+    L := 1;
+    ReportIDVar := 5;
+  End;
+  With EssInfo[4] Do
+  Begin
+    Name := 'South West';
+    Info := [TIntegerArray([290, 70, 0, 74, 3000])];
+    MSEss := [Point(252, 65)];
+    L := 0;
+    ReportIDVar := 8;
+  End;
+  With EssInfo[5] Do
+  Begin
+    Name := 'South East';
+    //Info := [TIntegerArray([285, 0, 0, 74, 1600]), TIntegerArray([0, 270, 0, 50, 2800])];
+    Info := [TIntegerArray([285, 0, 0, 74, 1400]), TIntegerArray([0, 270, 0, 50, 2500])];
+    MSEss := [Point(350, 195)];
+    L := 1;
+    ReportIDVar := 7;
+  End;
+End;
+
+Function AdeptDegree(CompassAngle: Extended; Degree: Integer): Integer;
+
+Begin
+  Result := Round(Abs(CompassAngle + Degree));
+  While Result > 360 Do
+    Result := Result - 360;
+End;
+
+Function FindEssence: Boolean;
+
+Var
+   I, cts: Integer;
+   P: TPoint;
+   TPA: TPointArray;
+   aTPA: T2DPointArray;
+
+Begin
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  SetColorSpeed2Modifiers(0.2, 0.2);
+  FindColorsTolerance(TPA, 9737632, MSX1, MSY1, MSX2, MSY2, 20);
+  aTPA := TPaToATPAEx(TPA, 15, 15);
+  SetLength(TPA, 0);
+  SortATPASize(aTPA, True);
+  ColorToleranceSpeed(cts);
+  For I := 0 To High(aTPA) Do
+  Begin
+    If Length(aTPa[I]) < 30 Then
+      Continue;
+    P := MiddleTPA(aTPA[I]);
+    MMouse(P.X, P.Y, 5, 5);
+    Wait(200);
+    If (CountColorTolerance(14342657, 7, 7, 100, 25, 50) > 100) Or IsUpText('ssen') Then
+    Begin
+      Result := True;
+      GetMousePos(P.X, P.Y);
+      Mouse(P.X, P.Y, 0, 0, True);
+      FNRWait(1000);
+      Exit;
+    End;
+  End;
+End;
+
+Function ScanMiniMap(iFrom, iTo, Distance: Integer): Integer;
+  // Old Code. Still works.
+Var
+   I, iX,iY: Integer;
+Begin
+  For I := iFrom To ITo Do
+  Begin
+    iX := Round(Distance * Sin(I * Pi / 180)) + MMCX;
+    iY := Round(-Distance * Cos(I * Pi / 180)) + MMCY;
+    If GetColor(iX, iY) = 65536 Then
+    Begin
+      Result := Result + 1;
+    End;
+  End;
+End;
+
+{Function InAbyss: Boolean;
+  // Old Code. Still works.
+Var
+   A : Integer;
+
+Begin
+  Result := False;
+  A := ScanMiniMap(0, 359, 50);
+  WriteLn('In Abyss gave '+IntToStr(A)+'.');
+  If A = 360 Then
+  Begin
+    WriteLn('We are in the Abyss random.');
+    Result := True;
+  End
+End;
+
+Function GuessAbyssRandom: Boolean;
+  // Old Code. Still works.
+Var
+   AbyssalMark, iX, iY, I, ChosenColor, Tol, Tries: Integer;
+   WeirdColors: Array Of Integer;
+   Operate: TPoint;
+Begin
+  WriteLn('In GuessAbyssRandom');
+  WeirdColors := [13751777, 4953873, 2509833];
+  Repeat
+    Case Random(4) Of
+      0: Begin Operate.X := 252; Operate.Y := 150; End;
+      1: Begin Operate.X := 278; Operate.Y := 170; End;
+      2: Begin Operate.X := 238; Operate.Y := 200; End;
+      3: Begin Operate.X := 215; Operate.Y := 166; End;
+    End;
+    For I := 0 To 2 Do
+    Begin
+      Tol := 0;
+      Repeat
+        Tol := Tol + 1;
+        iX := MSCX;
+        iY := MSCY;
+        If FindColorSpiralTolerance(iX, iY, WeirdColors[I], MSX1, MSY1, MSX2, MSY2, Tol) Then
+        Begin
+          ChosenColor := WeirdColors[I];
+          If (Distance (iX, iY, MSCX, MSCY) < 120) Then Break;
+        End;
+        If ChosenColor <> 0 Then
+          Break;
+      Until Tol > 9;
+    End;
+
+    If ChosenColor <> 0 Then
+    Begin
+      MMouse(iX, iY, 0, 0);
+      Wait(100);
+      If IsUpText('perate') Then
+      Begin
+        GetMousePos(iX, iY);
+        Mouse(iX, iY, 0, 0, True);
+      End;
+    End;
+
+    Wait(5000+Random(500));
+    If Not InAbyss Then
+    Begin
+      Abyss := Abyss + 1;
+      ReportVars[8] := ReportVars[8] + 1;
+      Result := True;
+      Wait(1000);
+      ClickToContinue;
+      SRLRandomsReport;
+      Exit;
+   End;
+    Tries := Tries + 1;
+    If TimeFromMark(AbyssalMark) > 60000 * 5 Then Break;
+  Until Tries > 30;
+
+   Tries := 0;
+   If InAbyss Then
+   Begin
+    Repeat
+      Case Random(4) Of
+        0: Begin Operate.X := 252; Operate.Y := 150; End;
+        1: Begin Operate.X := 278; Operate.Y := 170; End;
+        2: Begin Operate.X := 238; Operate.Y := 200; End;
+        3: Begin Operate.X := 215; Operate.Y := 166; End;
+      End;
+      iX := Operate.X;
+      iY := Operate.Y;
+      If FindColorSpiralTolerance(iX, iY, 3393, MSX1, MSY1, MSX2, MSY2, Tol)
+      Or FindColorSpiralTolerance(iX, iY, 2040150, MSX1, MSY1, MSX2, MSY2, Tol) Then
+      Begin
+        If (Distance (iX, iY, MSCX, MSCY) < 80) Then
+        Begin
+          MMouse(iX, iY, 0, 0);
+          Wait(100);
+          If IsUpText('perate') Then
+          Begin
+            GetMousePos(iX, iY);
+            Mouse(iX, iY, 0, 0, True);
+            Wait(5000+ Random(500));
+            If Not InAbyss Then
+            Begin
+              Abyss := Abyss + 1;
+              ReportVars[8] := ReportVars[8] + 1;
+              Result := True;
+              ClickToContinue;
+              SRLRandomsReport;
+              Exit;
+            End;
+          End;
+        End;
+      End;
+      Tries := Tries + 1;
+      Tol := Tol + 2;
+      If Tol > 20 Then Tol := 2;
+    Until Tries > 50;
+  End;
+  LogOut;
+  ReportVars[9] := ReportVars[9] + 1;
+  Players[CurrentPlayer].Loc := 'Abyss';
+  SRLRandomsReport;
+  WriteLn('Abyss Random Event Failed.');
+End;                              }
+
+Function GetPos: String;
+   // Get's our position and acts accoringly.
+Var
+   TPA: TPointArray;
+   I, C, E: Integer;
+   CA: Extended;
+
+Begin
+  Wait(500);
+
+  MakeCompass('N');
+  Result := '';
+
+  TPA := GetCurrentTPA;
+  CA := rs_GetCompassAngleDegrees;
+  For I := Low(EssInfo) To High(EssInfo) Do
+  Begin
+    With EssInfo[I] Do
+    Begin
+      //WriteLn(EssInfo[I].Name + ': Info Length ' + IntToStr(Length(Info)));
+      For C := 0 To L Do
+      Begin
+        E := ScanMM(TPA, AdeptDegree(CA, Info[C][0]), AdeptDegree(CA, Info[C][1]),
+        Info[C][2], Info[C][3]);
+
+        //WriteLn(IntToStr(c) + '...' +  IntToStr(E) + ' vs ' + IntToStr(Info[C][4]));
+
+        If E < Info[C][4] Then
+        Begin
+          //WriteLn('Breaking... ' + IntToStr(C) + ' E('+inttostr(E) + ') was smaller than info[C][4](' + inttostr(info[C][4]) + ')');
+          Break;
+        End;
+      End;
+      If C = L + 1 Then
+      Begin
+        Result := Name;
+        WriteLn('Location: ' + Result);
+        Break;
+      End;
+    End;
+  End;
+  If Result = '' Then
+  Begin
+    WriteLn('No Location!');
+    TerminateScript;
+  End;
+
+  If I = Length(EssInfo) Then
+    Exit;
+  Inc(ReportVars[EssInfo[I].ReportIDVar]);
+
+  With EssInfo[I] Do
+  Begin
+    For I := Low(MMClicks) To High(MMClicks) Do
+    Begin
+      Mouse(MMClicks[I].X, MMClicks[I].Y, 4, 4, True);
+      Wait(2000);
+      FFlag(0);
+      Wait(500);
+    End;
+    If Not FindEssence Then
+    Begin
+      NoEssFound := True;
+      WriteLn('No Essence');
+      //TerminateScript;
+    End;
+  End;
+End;
+
+Function EssenceCount: Integer;
+
+Var
+   I: Integer;
+   TPA: TPointArray;
+   B: TBox;
+
+Begin
+  Result := 0;
+  For I := 1 To 28 Do
+  Begin
+    B := InvBox(I);
+    FindColorsTolerance(TPA, 65536, B.X1, B.Y1, B.X2, B.Y2, 0);
+    If Length(TPA) = 82 Then
+      Result := Result + 1;
+  End;
+End;
+
+Procedure Bank;
+
+Var
+   I: Integer;
+   P: TPoint;
+   A: Extended;
+   TempEss: Integer;
+
+Begin
+  ReportVars[1] := ReportVars[1] + 1; // Banks
+  Players[CurrentPlayer].Banked := Players[CurrentPlayer].Banked + 1;
+  For I := 0 To 2 Do
+    If OpenBankFast('veb') Then
+      Break
+    Else
+      If FindBankers(P, A) Then
+      Begin
+        Mouse(p.x, p.y, 0, 0, True);
+        Wait(4000);
+        FFlag(0);
+        Wait(1500);
+      End;
+  If Not BankScreen Or PinScreen Then
+  Begin
+    LogOut;
+    Players[CurrentPlayer].Loc := 'NoBank';
+    Players[CurrentPlayer].Active := False;
+    Exit;
+  End;
+  TempEss := EssenceCount;
+  EssenceMined := EssenceMined + TempEss;
+  ReportVars[0] := ReportVars[0] + TempEss;
+  Players[CurrentPlayer].Integers[0] := Players[CurrentPlayer].Integers[0] + TempEss;
+  If Players[CurrentPlayer].Booleans[0] Then
+    Deposit(1, 28, True)
+  Else
+    Deposit(2, 28, True);
+
+  CloseBank;
+End;
+
+Procedure PlayerReport;
+
+Var
+  Active, Rand: string;
+  I: Integer;
+
+Begin
+  For I := 0 To High(Players) Do
+  Begin
+    If Players[i].Active Then
+      Active := 'T'
+    Else
+      Active := 'F';
+    If Players[i].Rand <> '' Then
+      Rand := '; Rand: ' + Players[i].Rand
+    Else
+      Rand := '';
+
+    WriteLn((IntToStr(I)) + ' : ' + Players[I].Nick + ' = ' +
+     Active + '; ' + Players[I].Loc  + rand + '; B: ' + IntToStr(Players[I].Integers[0])
+     + ' Essence;'+ ' M : ' + IntToStr(Players[I].Level[15]));
+  End;
+End;
+
+Procedure ProgressReport;
+
+Begin
+  WriteLn('----------------------------');
+  WriteLn('');
+  WriteLn('Wizzup? Essence Miner, Version ' + VersionNumber);
+  WriteLn('');
+  WriteLn('Worked for '+ TimeRunning);
+  WriteLn('Mined ' + IntToStr(EssenceMined) + ' Essence');
+  If Abyss > 0 Then WriteLn('Solved ' + IntToStr(Abyss) + ' abyssal random events.');
+  WriteLn('');
+  WriteLn('----------------------------');
+  WriteLn('');
+  PlayerReport;
+  WriteLn('');
+  WriteLn('----------------------------');
+  SRLRandomsReport;
+End;
+
+Procedure ScriptTerminate;
+
+Begin
+  ProgressReport;
+End;
+
+Function GetAndSetAnyReferenceColor: Boolean;
+
+Var
+   c: integer;
+
+Begin
+  NewAutoColorWorked := False;
+  c := FindRockColor;
+  If c > 0 Then
+  Begin
+    SetAutoColorReference('grey rock', c);
+    WriteLn('Got the color using the grey rock');
+    NewAutoColorWorked := True;
+    Result := True;
+    Exit;
+  End;
+End;
+
+Procedure InitPlayer;
+
+Var
+   I: Integer;
+Begin
+  For I := 1 To 5 Do
+  If Not Players[CurrentPlayer].Booleans[I] Then
+  Begin
+    Case I Of
+      1: SetGraphics(4, '', '' ,'', '', '', '', '', '');
+      2: Retaliate(False);
+      3: SetAudio(0, 0, 0, Mono);
+    End;
+    Players[CurrentPlayer].Booleans[I] := True;
+  End;
+
+  GetAllLevels;
+  SetChat('on',1);
+  SetChat('friends',2);
+  SetChat('on',3);
+  SetAngle(True);
+End;
+
+Procedure SetupScript;
+
+Var
+   I: Integer;
+Begin
+  SRLID := SRL_ID;
+  SRLPassword := SRL_PASS;
+  For I := 1 To 19 Do
+    ReportVars[I] := 0;
+  ScriptID := '51';
+  DeclarePlayers;
+  LoginPlayer;
+  InitPlayer;
+End;
+
+Var
+  T, T2, I:integer;
+
+begin
+//  Smartsetup(SmartPrefix, true, true, false);
+//  Settargetdc(smartgetdc);
+  AubTPA := CreateTPAFromText('isthin', UpChars);
+  SetupSRL;
+  SetupScript;
+
+  LoadLocations;
+  SetupNewAutoColor;
+  GetAndSetAnyReferenceColor;
+  Repeat
+
+    If Players[CurrentPlayer].Loc = 'Bank' Then
+      BankToAubury;
+
+    If Players[CurrentPlayer].Loc = 'Aubury' Then
+    Begin
+      T2 := GetSystemTime;
+      While Not AtMine Do
+      Begin
+        If GetSystemTime - T2 > 180000 Then
+        Begin
+          Players[CurrentPlayer].Loc := 'NoAubury';
+          Break;
+        End;
+        DoorClosed;
+        If FindAubury Then
+        Begin
+          T := GetSystemTime;
+          While (Not AtMine) and (GetSystemTime - t < 10000) Do Wait(250);
+          If AtMine Then
+            Break;
+        End;
+        Wait(500);
+      End;
+      Players[CurrentPlayer].Loc := 'Mine';
+    End;
+
+    If Players[CurrentPlayer].Loc = 'Mine' Then
+    Begin
+      Wait(500);
+{      If InAbyss Then
+        GuessAbyssRandom;}
+
+      GetPos;
+      T := GetSystemTime;
+      T2 := GetSystemTime;
+      While (GetSystemTime - T < 180000) And (InvCount < 28) Do
+      Begin
+        If NoEssFound Then
+        Begin
+          WriteLn('We did not find any essence...');
+          NoEssFound := NoEssFound xor NoEssFound;
+          Break;
+        End;
+        If GetSystemTime - T2 > 60000 Then
+        Begin
+          I := Random(13) + 1;
+          If I = 4 Then I := 2;
+          GameTab(I);
+          Wait(RandomRange(200, 4000));
+          GameTab(4);
+          T2 := GetSystemTime;
+        End;
+
+        If FindFight Then
+          Break;
+        Wait(1000);
+        If LevelUp Then
+        Begin
+          WriteLn('You levelled up');
+          Break;
+        End;
+        If FindNormalRandoms Then
+        Begin
+          T := GetSystemTime;
+          While GetSystemTime - T < 5000 Do
+          Begin
+            Wait(250);
+            FindNormalRandoms;
+          End;
+        End;
+      End;
+      MineToAubury;
+      AuburyToBank;
+      Bank;
+    End;
+
+    ProgressReport;
+
+    If Not LoggedIn Then
+    Begin
+      NextPlayer(False);
+      InitPlayer;
+      Continue;
+    End;
+
+    If Players[CurrentPlayer].Banked Mod Loads = 0 Then
+    Begin
+      NextPlayer(True);
+      InitPlayer;
+      Continue;
+    End;
+
+  Until False;
+End.

@@ -1,0 +1,577 @@
+program New;
+
+{.include srl/srl.scar}
+{.include srl/srl/skill/fighting.scar}
+{.include Foodies.scar}
+
+
+Const
+   UseArrowAutoColor = True;
+   HPLevel = 55;
+   PickArrows = True;  // Pickup arrows?
+   ReEquipArrow = False;
+
+Procedure DeclarePlayers;
+
+Begin
+  HowManyPlayers  := 1;
+  NumberOfPlayers( HowManyPlayers );
+  CurrentPlayer := 0;
+
+  Players[0].Name :='';
+  Players[0].Pass :='';
+  Players[0].Nick :='';
+  Players[0].Loc :='Bank'; // Not used yet.
+  Players[0].Strings[0] := 'Trout';{ACTUALLY SUPPORTS SALMON, NOT TROUT!!!} // Name of food.
+  Players[0].Integers[0] := 2; // Attack mode. (1 to 4)
+  Players[0].Strings[1] := 'Melee';  // Not used yet.
+  Players[0].Integers[1] := 10; // Time in minutes. Not used yet.
+  Players[0].Active := True;
+
+
+End;
+
+Var
+   ArrowColor, Kills, Ate, PickUps, Health, LoginStartTime: Integer;
+   ArrowFailSafe, LastMonsterTime: Integer;
+   HitPointsTimer: Integer;
+
+Procedure ProgressReport;
+
+Begin
+  Writeln('----------------------------');
+  WriteLn('');
+  Writeln('Wizzup and Markus Minotaur killer, Version 0.01 beta');
+  WriteLn('Worked for ' + TimeRunning);
+  If Kills > 0 Then
+    WriteLn('Attacked ' + IntToStr(Kills) + ' monsters.');
+  If Ate > 0 Then
+    WriteLn('Ate ' + IntToStr(Ate) + ' Foodies.');
+  If PickUps > 0 Then
+    WriteLn('Picked up arrows ' + IntToStr(PickUps) + ' times.');
+  WriteLn('');
+  Writeln('----------------------------');
+End;
+
+Procedure SetGlobalHealth;
+
+Var
+   ColorString: String;
+Begin
+  Health := GetMMLevels('hp', ColorString);
+  ClearReport;
+  AddToReport('HP = ' + IntToStr(Health));
+  HitPointsTimer := GetSystemTime;
+End;
+
+Procedure FindArrayColorsTolerance(Var TPA: TPointArray;
+          ColorsA: TIntegerArray; x1, y1, x2, y2: Integer; ToleranceArray: TIntegerArray);
+
+Var
+   I: Integer;
+   TPA2: TPointArray;
+   
+Begin
+  If Length(ColorsA) <> Length(ToleranceArray) Then
+    Exit;
+  For I:= 0 To High(ColorsA) Do
+  Begin
+    SetLength(TPA2, 0);
+    FindColorsTolerance(TPA2, ColorsA[I], x1, y1, x2, y2, ToleranceArray[I]);
+    TPA := CombineTPA(TPA, TPA2);
+  End;
+End;
+
+Function FindMinotaurs: TPointArray;
+
+Var
+   I, C, cts: Integer;
+   TPA: TPointArray;
+   aTPA: Array Of TPointArray;
+
+Begin
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);                    //White Horn color.
+  FindColorsSpiralTolerance(MSCX, MSCY, TPA, 9740191, 3, 3, 515, 336, 9);
+  ColorToleranceSpeed(cts);
+  aTPA := TPAToATPA(TPA, 30);
+  SetLength(Result, Length(aTPA));
+  For I := 0 To High(aTPA) Do
+    If Length(aTPA[I]) > 15 Then
+    Begin
+      Result[C] := MiddleTPA(aTPA[I]);
+      C := C + 1;
+    End;
+  SetLength(Result, C);
+End;
+
+Function GetDamageIn(x1, y1, x2, y2: Integer; Var Points: TPointArray): TIntegerArray;
+
+Var
+   I, C: Integer;
+   TPA: TPointArray;
+   aTPA: Array Of TPointArray;
+   B: TBox;
+
+Begin
+  FindColorsTolerance(TPA, 16777215, x1, y1, x2, y2, 0);
+  aTPA := TPAtoATPAEx(TPA, 15, 15);
+  SetLength(Result, Length(aTPA));
+  SetLength(Points, Length(aTPA));
+  For I := 0 To High(aTPA) Do
+  Begin
+    If Length(aTPA[I]) < 10 Then
+      Continue;
+    B := GetTPABounds(aTPA[I]);
+    Result[C] := StrToIntDef(GetNumbers(GetTextAtEx(b.x1 - 1, b.y1 - 1, 0, StatChars, False, False, 0,
+    3, 16777215, 2, False, tr_Digits)), -1); // clWhite?
+    Points[C] := Point((b.x1 + b.x2) shr 1,(b.y1 + b.y2) shr 1);
+    C := C + 1;
+  End;
+  SetLength(Result, C);
+  SetLength(Points, C);
+End;
+
+Function GetMyDamage: Integer;
+
+Var
+   I, L, LastDist: Integer;
+   Points: TPointArray;
+   aDamage: TIntegerArray;
+Begin
+  aDamage := GetDamageIn(240, 125, 300, 180, Points);
+  If Length(aDamage) = 0 Then
+    Exit;
+  L := 0;
+  LastDist := Distance(260, 150, Points[0].X, Points[0].Y);
+  For I := 1 To High(aDamage) Do
+    If Distance(260, 150, Points[I].X, Points[I].Y) < LastDist Then
+    Begin
+      L := I;
+      LastDist := Distance(260, 150, Points[I].X, Points[I].Y);
+    End;
+  Result := aDamage[L];
+End;
+
+Function HPBarPercent(topx, topy: Integer): Extended;
+
+Var
+   Green: TPointArray;
+
+Begin
+  FindColorsTolerance(Green, 65280, topx, topy, topx + 31, topy + 5, 0);
+  Result := Length(Green) Div 150;
+End;
+
+Function GetAllHPsIn(x1, y1, x2, y2: Integer): Array Of Extended;
+
+Var
+   TPA: TPointArray;
+   I: Integer;
+
+Begin
+  FindArrayColorsTolerance(TPA, [65280, 255], x1,
+  y1, x2, y2, [0, 0]);
+  RAaSTPAEx(TPA, 31, 5);
+  SetLength(Result, Length(TPA));
+  For I := 0 To High(TPA) Do
+    Result[I] := HPBarPercent(TPA[I].X, TPA[I].Y);
+End;
+
+Function aIntToaaInt(A: TIntegerArray): Array Of TIntegerArray;
+
+Var
+   L, D, I, C: Integer;
+   cCond: Boolean;
+
+Begin
+  L := High(A);
+  For I := 0 To L Do
+  Begin
+    cCond := False;
+    D := High(Result);
+    For C := 0 To D Do
+      If InIntArray(Result[C], A[I]) Then
+      Begin
+        SetLength(Result[C], D + 2);
+        Result[C][D + 1] := A[I];
+        cCond := True;
+      End;
+    If cCond Then
+      Continue;
+    C := Length(Result);
+    SetLength(Result, C + 1);
+    SetLength(Result[C], 1);
+    Result[C][0] := A[I];
+  End;
+End;
+
+Function AutoArrowColor: Integer;
+
+Var
+   I, L, D: Integer;
+   TPA: TPointArray;
+   Col: TIntegerArray;
+   Arr: Array Of TIntegerArray;
+   
+Begin
+  FindColorsTolerance(TPA, 792171, MIX1, MIY1, MIX2, MIY2, 9);
+  Col := GetColors(TPA);
+  Arr := aIntToaaInt(Col);
+  D := 20; // minimum length.
+  For I := 0 To High(Arr) Do
+  Begin
+    If Length(Arr[I]) > D Then
+    Begin
+      D := Arr[I][0];
+      L := I;
+    End;
+  End;
+  Try
+    Result := Arr[L][0];
+  Except Result := - 1;
+  Finally WriteLn('AutoArrowColor: ' + IntToStr(Result)); End;
+End;
+
+Function EquipArrows: Boolean;
+
+Var
+   I, L, cts: Integer;
+   TP: TPoint;
+   TPA: TPointArray;
+   aTPA: Array Of TPointArray;
+   
+Begin
+  Result := False;
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  FindColorsTolerance(TPA, 4408393, MIX1, MIY1, MIX2, MIY2, 14);
+  colortolerancespeed(cts);
+  aTPA := TPAToATPAEx(TPA, 42, 36);
+  Try
+    SortATPASize(aTPA, True);
+  Except Exit; End;
+  WriteLn('Equipping arrows');
+  For I := 0 To High(aTPA) Do
+  Begin
+    If Length(aTPA[I]) < 30 Then
+      Continue;
+    TP := MiddleTPA(aTPA[I]);
+    L := 0;
+    L := CoordsToItem(TP.X, TP.Y);
+    MMouseItem(L);
+    Wait(500);
+    If IsUpText('rrow') Then
+    Begin
+      GetMousePos(TP.X, TP.Y)
+      Mouse(TP.X, TP.Y, 0, 0, True);
+      Result := True;
+      Break;
+    End;
+  End;
+End;
+
+Function FindArrows: TPointArray;
+
+Var
+   I, cts, C: Integer;
+   aTPA: Array Of TPointArray;
+Begin
+  If UseArrowAutoColor Then
+    If ArrowColor < 1 Then
+      ArrowColor := AutoArrowColor;
+  If ArrowColor > 0 Then
+    FindColorsSpiralTolerance(MSCX, MSCY, Result, ArrowColor, 3, 3, 515, 336, 0)
+  Else
+  Begin
+    cts := GetColorToleranceSpeed;
+    ColorToleranceSpeed(2);                      //Red Arrow color.
+    FindColorsSpiralTolerance(MSCX, MSCY, Result, 792171, 3, 3, 515, 336, 9);
+    ColorToleranceSpeed(cts);
+  End;
+  aTPA := TPAToATPA(Result, 20);
+  SetLength(Result, 0);
+  SetLength(Result, Length(aTPA));
+  C := 0;
+  For I := 0 To High(aTPA) Do
+    If Length(aTPA[I]) > 15 Then
+    Begin
+      Result[C] := MiddleTPA(aTPA[I]);
+      C := C + 1;
+    End;
+  SetLength(Result, C);
+End;
+
+Function PickupArrows: Boolean;
+
+Var
+   T, I, n: Integer;
+   s: String;
+   TPA: TPointArray;
+   
+Begin
+  ArrowFailSafe := ArrowFailSafe + 1;
+  If ArrowFailSafe > 20 Then
+  Begin
+    Players[CurrentPlayer].Loc := 'ArrowFailSafe.';
+    WriteLn('ArrowFailSafe');
+    AddToReport('WFCKIT');
+    LogOut;
+    ArrowFailSafe := 0;
+    Exit;
+  End;
+  T := GetSystemTime;
+  Wait(100);
+  If FlagPresent Then
+  Begin
+    While (GetSystemTime - T < 10000) And FlagPresent Do
+      Wait(100);
+    Wait(1000);
+  End;
+  FindNormalRandoms;
+  TPA := FindArrows;
+  If Length(TPA) = 0 Then
+    Exit;
+  For I := Low(TPA) To High(TPA) Do
+  Begin
+    MMouse(TPA[I].X, TPA[I].Y - 10, 0, 0);
+    GetMousePos(TPA[I].X, TPA[I].Y);
+    Wait(100);
+    If IsUpText('rrow') Then
+    Begin
+      Mouse(TPA[I].X, TPA[I].Y, 0, 0, True);
+      Wait(200);
+      FFlag(0);
+      FTWait(1);
+      PickUps := PickUps + 1;
+      PickUpArrows;
+    End
+    Else
+    Begin
+      s := rs_GetUpText;
+      n := StrToIntDef(GetNumbers(Between('/', 'more', s)), 0);
+      If n > 2 Then   // 'n more options'
+      Begin
+        Mouse(TPA[I].X, TPA[I].Y, 0, 0, False);
+        Wait(200);
+        ChooseOption('rrow');
+        FFlag(0);
+        FTWait(1);
+        PickUps := PickUps + 1;
+        PickUpArrows;
+      End;
+    End;
+  End;
+  Result := True;
+End;
+
+Function FindFood(Var x, y: Integer): Boolean;
+
+Var
+   I: Integer;
+   iBox: TBox;
+
+Begin
+  If Not LoggedIn Then
+    Exit;
+  SetLength(InvFoodArray, 0);
+  SetLength(InvFoodArray, 28);
+  GetFullInv;
+  For I := 1 To 28 Do
+  begin
+    If (InvFoodArray[I - 1].State = Cooked) And
+    (lowercase(InvFoodArray[I - 1].Name) = lowercase(Players[CurrentPlayer].Strings[0])) Then
+    Begin
+      writeln('We found a piece of food in: '+inttostr(i));
+      iBox := InvBox(I);
+      Result := True;
+      x := (iBox.x1 + iBox.x2) Shr 1;
+      y := (iBox.y1 + iBox.y2) Shr 1;
+      Exit;
+    End;
+  end;
+  Result := False;
+End;
+
+Function Eat: Boolean;
+
+Var
+   x, y, cts: Integer;
+Begin
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  If FindFood(x, y) Then
+  Begin
+    Result := True;
+    Ate := Ate + 1;
+    Mouse(x, y, 8, 8, True);
+    FTWait(12);
+  End Else
+  Begin
+    writeln('We are out of food, logging out.');
+    Players[CurrentPlayer].Loc := 'NoFood';
+    LogOut;
+    Result := False;
+  End;
+  ColorToleranceSpeed(1);
+End;
+
+Function NeedHelf: Boolean;
+  // Health and Help together. Just a small joke on the name.
+
+Var
+   ColorString: String;
+
+Begin
+  Result := False;
+  if (GetSystemtime-HitPointsTimer > 5000) then
+    SetGlobalHealth;
+  If HPLevel - Health > 10 Then
+  Begin
+    Health := GetMMLevels('hp', ColorString);
+    If Not HPLevel - Health > 7 Then
+      Exit;
+    Eat;
+    Result := True;
+  End;
+End;
+
+Function FightMonster: Boolean;
+
+Var
+   I, T, FightCount: Integer;
+   dBreak: Boolean;
+   HP: TExtendedArray;
+   M: TPointArray;
+   Reason: String;
+   
+Begin
+  Result := False;
+  Wait(100);
+  If GetSystemTime - LastMonsterTime > 120000 Then
+  Begin
+    Players[CurrentPlayer].Loc := 'LastMonsterTime';
+    WriteLn('LastMonsterTime');
+    Logout;
+    LastMonsterTime := GetSystemTime;
+    Exit;
+  End;
+  M := FindMinotaurs;
+  For I := 0 To High(M) Do
+  Begin
+    MMouse(M[I].X, M[I].Y, 4, 4);
+    Wait(100);
+    If IsUpText('ttack') Then
+    Begin
+      GetMousePos(M[I].X, M[I].Y);
+      Mouse(M[I].X, M[I].Y, 0, 0, True);
+      Break
+    End;
+  End;
+  If I = Length(M) Then
+    Exit;
+  T := GetSystemTime;
+  While GetSystemTime - T < 5000 Do
+  Begin
+    Wait(200);
+    If Not FlagPresent Then
+      Break;
+  End;
+  If GetSystemTime - T > 5000 Then
+    Mouse(MMCX, MMCY, 8, 8, True);
+  T := GetSystemTime;
+  Reason := 'Time';
+  While GetSystemTime - T < 30000 Do
+    // Maybe theirCombat Div MyCombat * 60000?
+  Begin
+    Wait(200);
+    If (GetSystemTime - T Mod 1000) < 200 Then
+      FindNormalRandoms;
+    SetLength(HP, 0);
+    HP := GetAllHPsIn(200, 120, 340, 215);
+    For I := 0 To High(HP) Do
+      If HP[I] = 0 Then
+      Begin
+        dBreak := True;
+        Break;
+      End;
+    If dBreak Then
+    Begin
+      Kills := Kills + 1;
+      LastMonsterTime := GetSystemTime;
+      Reason := 'HP = 0';
+      Break;
+    End;
+    
+    If Not InFight Then
+      FightCount := FightCount + 1
+    Else
+      FightCount := 0;
+    If FightCount > 20 Then
+    Begin
+      Reason := 'InFight';
+      Break;
+    End;
+  End;
+  //WriteLn('Out of fighting loop: ' + Reason);
+  Result := True;
+End;
+
+Procedure InitPlayer;
+
+Begin
+  SetFightMode(Players[CurrentPlayer].Integers[0]);
+  LoginStartTime := GetSystemTime;
+  LastMonsterTime := GetSystemTime;
+  GetAllLevels;
+End;
+
+Procedure SetupScript;
+
+Begin
+  SetupSRL;
+  DeclarePlayers;
+  LoginPlayer;
+  LoadFishArray;
+  InitPlayer;
+  ArrowColor := 0;
+  Health := 10;
+End;
+
+Var
+   T: Integer;
+begin
+  SetupScript;
+  T := GetSystemTime;
+  SetAngle(True);
+  Repeat
+    Players[CurrentPlayer].Integers[3] := Players[CurrentPlayer].Integers[1] + random(10);
+    Repeat
+      FTWait(1);
+      If FindNormalRandoms Then
+        LastMonsterTime := GetSystemTime;
+      If PickArrows Then
+        PickUpArrows;  // Recursive.
+      ArrowFailSafe := 0;
+      FightMonster;
+      NeedHelf;
+      Wait(100);
+      ProgressReport;
+      If (GetSystemTime - T > 60000) Then
+        If ReEquipArrow Then
+        Begin
+          EquipArrows;
+          T := GetSystemTime;
+        End;
+      If Not LoggedIn Then
+        Break;
+      If GetSystemTime - LoginStartTime > Players[CurrentPlayer].Integers[3] * 60000 Then
+      Begin
+        WriteLn('Time to leave ' + Players[CurrentPlayer].Name + '...');
+        Break;
+      End;
+    Until false;  // some times for each player.
+    NextPlayer(LoggedIn);
+    InitPlayer;
+  until false;
+end.
