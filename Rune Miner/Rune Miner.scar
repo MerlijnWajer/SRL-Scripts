@@ -1,0 +1,553 @@
+program RuniteMinerWorldSwitcher;
+
+{.include SRL/SRL.scar}
+{.include SRL/SRL/Skill/Mining.scar}
+
+Const
+   StartPlayer = 0;
+
+{
+Wizzup? Rune Miner and World Switcher
+Worked for 1 Hours, 0 Minutes and 54 Seconds
+Mined 28 Rune Ores
+Gasses avoided 0
+
+Wizzup? Rune Miner and World Switcher
+Worked for 45 Minutes and 6 Seconds
+Mined 28 Rune Ores
+}
+Procedure DeclarePlayers;
+
+Begin
+   NumberOfPlayers(1);
+   SRLID   := '';
+   SRLPassword := '';
+
+   Players[0].Name :='';
+   Players[0].Pass :='';
+   Players[0].Nick :='';
+   Players[0].Active:=True;
+   Players[0].Loc := 'Rune';
+   Players[0].Booleans[0]  := True;       // Is The Pick Equipped?
+   Players[0].Booleans[1] := True; // False for brightness Check Once.
+
+   HowManyPlayers := Length(Players);
+   Writeln( IntToStr ( HowManyPlayers ) + ' Players' );
+End;
+
+Type
+  w_World = Record
+    Number: Integer;
+    Timer: Integer;
+    Mined: Boolean;
+
+End;
+
+Var
+   Worlds: Array Of w_World;
+   noRune: Boolean;
+   RuneColor, LastInv, Gasses, InvC: Integer;
+
+Function WorldScreen: Boolean;
+
+Begin
+  Result := SimilarColors(GetColor(65, 17), 1340055, 14);
+End;
+
+
+Function WorldSwitchButton: Boolean;
+
+Var
+   t: LongInt;
+Begin
+  If SimilarColors(GetColor(58, 481), 4997697, 14) Then
+  Begin
+    t := GetSystemTime;
+    Result := True;
+    Mouse(58, 481, 5, 10, True);
+    Repeat
+      Wait(16);
+      If WorldScreen Then
+        Break;
+    Until GetSystemTime - t > 10000;
+    If GetSystemTime - t > 10000 Then
+      Result := False;
+    Wait(1000);
+  End
+  Else
+    Result := False;
+End;
+
+function w2_GasCheck(gx, gy: integer): boolean;
+
+Var
+   x1, y1, x2, y2, I, time, c: Integer;
+   R, G, B: Integer;
+   H, S, L: ExtEnded;
+   X, Y, Z: ExtEnded;
+   Gas, Gas2: TPointArray;
+   Colors, C2: TIntegerArray;
+
+begin
+  Try
+    x1 := gx - 35;
+    If x1 < 0 Then
+      x1 := 0;
+    y1 := gy - 35;
+    If y1 < 0 Then
+      y1 := 0;
+    x2 := gx + 35;
+    If x2 > 515 Then
+      x2 := 515;
+    y2 := gy + 35;
+    If y2 > 336 Then
+      y2 := 336;
+    Time := GetSystemTime;
+    Result := False;
+    c := GetColorToleranceSpeed;
+    ColorToleranceSpeed(2);
+    SetColorSpeed2ModIfiers(0.2, 0.2);
+    FindColorsTolerance(Gas, 6126985, x1, y1, x2, y2, 20);
+    ColorToleranceSpeed(c);
+    If length(Gas) < 10 Then
+      Exit;
+    Colors := GetColors(Gas);
+    C2 := Colors;
+    ClearSameIntegers(C2);
+    writeln('w2_Colors Length: ' + inttostr(length(colors)));
+    writeln('w2_C2 Length: ' + inttostr(length(C2)));
+    If Length(C2) < 40 Then
+      Exit;
+    For I := 0 To High(Gas) Do
+    Begin
+      ColorToRGB(Colors[I], R, G, B);
+      If Abs((R - 10) - G) <= 5.0 Then
+      Begin
+        ColorToHSL(Colors[I], H, S, L);
+        If (H > 10.0) And (H < 18.0) And (S > 12.0) And (S < 22.0) Then
+        Begin
+          ColorToXYZ(Colors[I], X, Y, Z);
+          If (Abs(X - Z) < 3.0) Then
+          Begin
+            SetLength(Gas2, Length(Gas2) + 1);
+            Gas2[High(Gas2)] := Gas[I];
+          End;
+        End
+      End;
+    End;
+    WriteLn('w2_time: ' + IntToStr(GetSystemTime - Time));
+    WriteLn('w2_gas2 length: ' + IntToStr(Length(Gas2)));
+    Result := (Length(Gas2) > 30); // The only number you might want to tweak.
+    If Result Then
+      WriteLn('w2_GasCheck gave true');
+  Except WriteLn('w2_gasCheck ERROR: No window selected'); End;
+End;
+
+Function FindWorld(Var x, y: integer; WorldNum: Integer): Boolean;
+
+Var
+   bmp, i: integer;
+
+Begin
+  x := 750;
+  If WorldNum < 21 Then
+  Begin
+    x := 140;
+  End
+  bmp := CreateBitmapMaskFromText(IntToStr(WorldNum), UpChars);
+ For I := 0 To 6 Do
+    If (FindBitmapMaskTolerance(bmp, x, y, 55 + (i * 93), 30, 147 + (i * 93), 491, 15, 15)) Then
+    Begin
+      Result := True;
+      Break;
+    End;
+  FreeBitmap(bmp);
+End;
+
+Function WorldPlayers(x, y: integer): String;
+
+Begin
+  FindColor(x, y, 16777215, x, y, x + 100, y + 20);
+  Result := Trim(GetTextAtEx(x - 2, y - 1, 20, StatChars, True, True, 0, 2, 16777215, 10,
+  False, tr_Allchars));
+  If TrimLetters(Result) = '' Then
+    Result := 'FULL';
+//  If (Result = 'LL') Or (Result = '')  Or (Result = 'OFF') Then Result := 'FULL';
+End;
+
+Function LoadWorld(WorldNumber: Integer): Boolean;
+
+Var
+   x, y: Integer;
+   n: string;
+
+Begin
+  FindWorld(x, y, WorldNumber);
+  n := WorldPlayers(x, y);
+  WriteLn('Searching for world ' + IntToStr(WorldNumber));
+  If N <> 'FULL' Then
+  Begin
+    Mouse(x, y, 5, 5, True);
+    Result := True;
+    WriteLn('Going to world ' + IntToStr(WorldNumber) +
+    ' and has ' + n + ' players.');
+  End
+  Else
+    WriteLn('World is either Full or does not exist.');
+End;
+
+Procedure w_Swap(Var a, b: w_World);
+
+Var
+   c: w_World;
+
+Begin
+  c := a;
+  a := b;
+  b := c;
+End;
+
+Procedure SetEnd(Var a: Array Of w_World; From: Integer);
+
+Var
+   I: Integer;
+Begin
+  SetArrayLength(a, GetArrayLength(a) + 1);
+  w_Swap(a[From], a[GetArrayLength(a) - 1]);
+  For I := From To GetArrayLength(a) - 2 Do
+    w_Swap(a[I], a[I + 1]);
+  SetArrayLength(a, GetArrayLength(a) - 1);
+End;
+
+Procedure SwapInsertArray(Var a: Array Of w_World; From, Insert: Integer);
+
+Var
+   I: Integer;
+
+Begin
+  SetArrayLength(a, GetArrayLength(a) + 1);
+  If Insert < From Then
+  Begin
+  For I := GetArrayLength(a) - 1 DownTo Insert + 1 Do
+    w_Swap(a[I - 1], a[I]);
+    w_Swap(a[Insert], a[From + 1])
+    For I := From + 1 To GetArrayLength(a) - 2 Do
+      w_Swap(a[I], a[I + 1]);
+  End
+  Else
+  Begin
+    For I := GetArrayLength(a) - 1 DownTo Insert + 2 Do
+    w_Swap(a[I - 1], a[I]);
+    w_Swap(a[Insert + 1], a[From]);
+    For I := From + 1 To GetArrayLength(a) - 1 Do
+      w_Swap(a[I], a[I - 1]);
+  End;
+  SetArrayLength(a, GetArrayLength(a) - 1);
+End;
+
+Function SwitchWorld: Boolean;
+
+Var
+   I, t: Integer;
+Begin
+  If Not WorldScreen Then
+    If Not WorldSwitchButton Then
+    Begin
+      Exit;
+      WriteLn('No World Screen');
+    End;
+  t := GetSystemTime;
+  For I := 0 To GetArrayLength(Worlds) - 1 Do
+  Begin
+    If Worlds[I].Mined = True Then
+      If t - Worlds[I].Timer > 20 * 60000 Then
+      Begin
+        Worlds[I].Mined := False;
+        SwapInsertArray(Worlds, I, 0);
+      End;
+  End;
+  WriteLn('First World ' + IntToStr(Worlds[0].Number) + '.');
+  If LoadWorld(Worlds[0].Number) Then
+  Begin
+    Result := True;
+    WriteLn('World ' + IntToStr(Worlds[0].Number) + ' Succeeded.');
+    Repeat
+      Wait(10);
+      If WelcomeToRuneScape Then
+        Break;
+    Until GetSystemTime - t > 60000;
+    If GetSystemTime - t > 60000 Then
+    Begin
+      Result := False;
+      WriteLn('Time from mark higher than 60000');
+    End;
+    SetEnd(Worlds, 0);
+  End
+  Else
+  Begin
+    Result := False;
+    WriteLn('World ' + IntToStr(Worlds[0].Number) + ' Failed, trying new world.');
+    SetEnd(Worlds, 0);
+    WriteLn(IntToStr(Worlds[0].Number));
+    Exit;
+  End;
+End;
+
+Procedure LoadWorldArray;
+
+Var
+   Nums: TIntegerArray;
+   I: Integer;
+
+Begin
+  Nums := [54, 53, 143, 138, 24, 26, 27, 28, 31, 36, 39, 42, 44,
+  45, 46, 48, 56, 58, 59, 64, 65, 66, 144, 69, 70, 71,
+  76, 77, 78, 79, 82, 83, 84, 88, 89, 91, 92, 97, 98, 99, 100,
+  103, 104, 110, 111, 112, 114, 115, 116, 120, 121, 124,
+  129, 130, 131, 132, 137, 18, 22, 23];
+  SetArrayLength(Worlds, GetArrayLength(Nums));
+  For I := 0 To GetArrayLength(Nums) - 1 Do
+  Begin
+    Worlds[I].Number := Nums[I];
+    Worlds[I].Mined := False;
+    Worlds[I].Timer := 0;
+  End;
+End;
+
+Procedure ScrambleWorldArray;
+
+Var
+   I: Integer;
+Begin
+  For I := 0 To 1000 Do
+    w_Swap(Worlds[Random(Length(Worlds))], Worlds[Random(Length(Worlds))]);
+End;
+
+Function AmountOfDifferentColors(a: TPointArray): Integer;
+
+Var
+   Colors: TIntegerArray;
+
+Begin
+  Colors := GetColors(a);
+  ClearSameIntegers(Colors);
+  Result := Length(Colors);
+End;
+
+Function FollowRock(Var r: TPoint): Boolean;
+
+Var
+   Rocks: TPointArray;
+   cts: Integer;
+
+Begin
+  Result := False;
+  cts := GetColorToleranceSpeed;
+  ColorToleranceSpeed(2);
+  FindColorsTolerance(Rocks, RuneColor, r.x - 20, r.y - 20, r.x + 20, r.y + 20, 19);
+  If GetArrayLength(Rocks) < 35 Then
+  Begin
+    ColorToleranceSpeed(cts);
+    Exit;
+  End;
+  r := MiddleTPA(Rocks);
+  Result := True;
+  ColorToleranceSpeed(cts);
+End;
+
+Function FindRunite(var RuneRocks: TPointArray): Boolean;
+
+Var
+   aRR: TPointArrayArray;
+   I, n: Integer;
+
+Begin
+  FindColorsSpiralTolerance(MSCX, MSCY, RuneRocks, RuneColor, MSX1, MSY1, MSX2, MSY2, 29);
+  aRR := TPAToATPA(RuneRocks, 50);
+  SetLength(RuneRocks, 0);
+  SetLength(RuneRocks, Length(aRR));
+  n := 0;
+  For I := 0 To High(aRR) Do
+    If Length(aRR[I]) > 40 Then
+    Begin
+      RuneRocks[n] := MiddleTPA(aRR[I]);
+      If w2_GasCheck(RuneRocks[n].x, RuneRocks[n].y) Then
+        Continue;
+      n := n + 1;
+    End;
+  SetLength(RuneRocks, n);
+  If Length(RuneRocks) > 0 Then
+    Result := True;
+End;
+
+Function MineRune: Boolean;
+
+Var
+   a: TPointArray;
+   i, c, t: Integer;
+
+Begin
+  noRune := Not FindRunite(a);
+  For I := 0 To High(a) Do
+  Begin
+    c := AmountOfDifferentColors(a)
+    If c > 50 Then
+    Begin
+      WriteLn('Amount of different Colors: ' +IntToStr(c));
+      Continue;
+    End;
+    MMouse(a[i].x, a[i].y, 0, 0);
+    Wait(200+Random(200));
+    If IsUpText('ine') Then
+    Begin
+      Mouse(a[i].x, a[i].y, 0, 0, True);
+      t := GetSystemTime;
+      Repeat
+        FindPick;
+        If w2_GasCheck(a[i].x, a[i].y) Then
+        Begin
+          Gasses := Gasses + 1;
+          NoRune := True;
+          Mouse(mmcx, mmcy, 2, 2, True);
+          FTWait(4);
+          Exit;
+        End;
+        if not loggedin then exit;
+        FindNormalRandoms;
+        Wait(100);
+        If FindFight Then
+        Begin
+          RunTo('S', True);
+          Exit;
+        End;
+        Wait(100);
+        If GetSystemTime - t > 60000 Then
+          Exit;
+        If NoPick Then
+          Exit;
+      Until Not FollowRock(a[i]);
+      Result := True;
+      Exit;
+    End;
+  End;
+End;
+
+Procedure WriteTimers;
+
+Var
+   I: Integer;
+Begin
+  //ClearDebug;
+  WriteLn('********* TIMERS *********');
+  For I := 0 To Length(Worlds) - 1 Do
+    If Worlds[I].Mined Then
+      WriteLn(IntToStr(Worlds[I].Number) + ': ' + FloatToStr((GetSystemTime - Worlds[I].Timer) Div 60000));
+  WriteLn('********* TIMERS *********');
+End;
+
+Procedure WriteNext10;
+
+Var
+   I: Integer;
+Begin
+  ClearReport;
+  For I := 0 To 10 Do
+    AddToReport(IntToStr(I) +': ' + IntToStr(Worlds[I].Number));
+End;
+
+Procedure ProgressReport;
+
+Begin
+  WriteLn('');
+  WriteLn('-------------------------------------------------');
+  WriteLn('');
+  WriteLn('Wizzup? Rune Miner and World Switcher');
+  WriteLn('Worked for ' + TimeRunning);
+  Writeln('Mined ' + IntToStr(InvC) + ' Rune Ores');
+  WriteLn('Gasses avoided ' + IntToStr(Gasses));
+  WriteLn('');
+  WriteLn('-------------------------------------------------');
+  WriteLn('');
+End;
+
+Var
+   I, t: Integer;
+   a: TPointArray;
+   b: boolean;
+
+begin
+  b := false;
+  ColorToleranceSpeed(1);
+  SetupSRL;
+  SetupMining;
+  ScriptID := '249';
+  NoPick := False;
+  RuneColor := 9801573;
+  ClearDebug;
+  DeclarePlayers;
+  LoadWorldArray;
+  ScrambleWorldArray;
+  Repeat
+    If InvFull Then
+      Break;
+    If NoPick Then
+      Break;
+    WriteNext10;
+    WriteTimers;
+    ProgressReport;
+    If SwitchWorld Then
+    Begin
+      LoginPlayer;
+      Wait(500);
+      if not b then
+      Begin
+        highestangle;
+        lastinv := invcount;
+        b := true;
+      end;
+      FindNormalRandoms;
+      If FindRunite(a) Then
+      Begin
+        If hc1 = 0 Then
+          FindPickHeadColor;
+        t := GetSystemTime;
+        Repeat
+          MineRune;
+          FindPick;
+          if not loggedin then break;
+          if invfull then break;
+          If NoPick Then
+            Break;
+        Until NoRune Or (GetSystemTime - t > 3 * 60000);
+        Worlds[0].Timer := GetSystemTime;
+        Worlds[0].Mined := True;
+      End
+      Else
+      Begin
+        Worlds[0].Mined := False;
+        Worlds[0].Timer := 0;
+      End;
+      {
+      If you don't Set it to zero it will keep adding
+      InvCount to InvC, instead of just setting it to a val.
+      Example:
+        InvCount = 12;
+        InvC is 12; from the last InvCount.
+        If you just do
+        InvC := InvCount it will somehow be 12 + 12 = 24.
+      }
+      InvC := 0;
+      InvC := InvCount;
+      ReportVars[0] := ReportVars[0] + InvC - LastInv;
+
+      WriteLn('InvC: ' + IntToStr(InvC));
+      WriteLn('Rune Ores ReportVar: ' + IntToStr(ReportVars[0]));
+      LastInv := InvC;
+      LogOut;
+      If InvC = 28 Then
+        TerminateScript;
+      SRLRandomsReport;
+    End;
+  Until False;
+end.
+

@@ -1,0 +1,856 @@
+program New;
+
+{
+
+<============== -2.01- Progress Report ===============>
+Banked 123 Times
+Crafted 3444 Laws.
+Crafting 611 Laws per hour.
+Made 1067640 Geepees.
+Worked For 5 Hours, 38 Minutes and 0 Seconds
+<=====================================================>
+
+0 : * = T. RC: 62. B :152 Times. W : 412 Mins. L : Bank
+
+<============== -2.01- Progress Report ===============>
+Banked 151 Times
+Crafted 4227 Laws.
+Crafting 603 Laws per hour.
+Made 1310370 Geepees.
+Worked For 7 Hours, 0 Minutes and 25 Seconds
+<=====================================================>
+
+
+**********************************************
+Name           : *
+Number         : 0
+RC Level : 62
+Worked for     : 412 minutes.
+Banked         : 152 times.
+Active         : True
+Location       : Bank
+**********************************************
+
+<============== -2.01- Progress Report ===============>
+Banked 100 Times
+Crafted 2800 Laws.
+Crafting 639 Laws per hour.
+Made 868000 Geepees.
+Worked For 4 Hours, 22 Minutes and 44 Seconds
+<=====================================================>
+
+
+**********************************************
+Name           : *
+Number         : 0
+RC Level : 59
+Worked for     : 131 minutes.
+Banked         : 100 times.
+Active         : True
+Location       : Bank
+**********************************************
+
+0 : * = T. RC: 56. B :56 Times. W : 138 Mins. L : Bank
+
+<============== -2.01- Progress Report ===============>
+Banked 56 Times
+Used up 0 Essence.
+Crafted 1568 Laws.
+Crafting 610 Laws per hour.
+Made 486080 Geepees.
+Worked For 2 Hours, 34 Minutes and 7 Seconds
+<=====================================================>
+
+<============== -2.01- Progress Report ===============>
+Banked 44 Times
+Crafted 1232 Laws.
+Crafting 586 Laws per hour.
+Made 381920 Geepees.
+Worked For 2 Hours, 6 Minutes and 0 Seconds
+<=====================================================>}
+
+{.include SRL/SRL/Misc/Smart.scar}
+{.include SRL/SRL.scar}
+{.Include SRL/SRL/Skill/RuneCrafting.scar}
+
+Const
+  Slow = 1; // The higher slow is, the longer the waits.
+  Loads = 50;
+  Debug = True;
+  NumberOfUsers = 1;
+  StartPlayer = 0;
+  MySRLID             = '';   //<- your SRL ID (for stats) in here.
+  MySRLPassword       = ''; //<- your SRL PW (for stats) in here.
+  RemoteMaster        = ''; //<- fill in the Nickname of the RC master.
+  RemoteLocation      = 'Bank'; //<- fill in the Location of the RC slaves.
+
+Var
+   MyMark, Laws, GloryCharges:Integer;
+   EssenceBMP, Glory: Integer;
+   ChangeGlory: Boolean;
+
+//----------------------------------------------------------------------------//
+Const
+   VersionNumber       = '0.01';
+//---------------------------------------------------------------------------//
+
+
+Procedure DeclarePlayers;
+  Begin
+     HowManyPlayers  := NumberOfUsers;
+     NumberOfPlayers( HowManyPlayers );
+     CurrentPlayer := StartPlayer;
+
+     Players[0].Name :='';
+     Players[0].Pass :='';
+     Players[0].Nick :='';
+     Players[0].Loc :='Bank';
+     Players[0].Strings[0] := '';
+     Players[0].Active:=True;
+
+End;
+
+Function LoadPath(PathType: String): TPointArray;
+
+Begin
+  Case PathType Of
+  'ToMonk':
+    Result := [Point(3092, 3243), Point(3084, 3249), Point(3078, 3255),
+    Point(3072, 3261), Point(3072, 3269), Point(3066, 3269),
+    Point(3065, 3262), Point(3060, 3253), Point(3051, 3248),
+    Point(3042, 3242), Point(3048, 3236)];
+  'InsideAltar':
+    Result := [Point(2464, 4819), Point(2464, 4830)];
+  'LogToAltar':
+    Result := [Point(2834, 3335), Point(2845, 3335), Point(2855, 3340),
+    Point(2859, 3346), Point(2858, 3356), Point(2857, 3367), Point(2858, 3379)];
+  'ToBank':
+    Result := [Point(3105, 3251), Point(3097, 3249), Point(3092, 3244)];
+  End;
+End;
+
+Procedure FillMem;
+begin
+  EssenceBMP := BitmapFromString(22, 1, 'beNqbMb00N7c8Px+Iqgo' +
+       'La4qL60pLG8rLmyorW6qr2mprOurruhoaepqaelua+9taJ7a3T+7s' +
+       'nNrdNb23Z2Zf35xJExcDADhTIas=');
+  Glory := BitmapFromString(4, 6, 'beNoTXXhwv2St6EIgWrVCDMIAo' +
+       'uVLEWyiEABEOx2T');
+end;
+
+//----------------------------------------------------------------------------//
+
+Function AtTile(Tile: TPoint; Dist: Integer): Boolean;
+
+Var
+   P: TPoint;
+Begin
+  GetMyPos(P.X, P.Y);
+  Result := Distance(P.X, P.Y, Tile.X, Tile.Y) <= Dist;
+End;
+
+Function WalkTile(Tile: TPoint; Randomness, FlagD: Integer): Boolean;
+
+Var
+   wTile: TPoint;
+   t: Integer;
+
+Begin
+  Tile.X := RandomRange(Tile.X-Randomness, Tile.X+Randomness);
+  Tile.Y := RandomRange(Tile.Y-Randomness, Tile.Y+Randomness);
+  TileToMiniMap(Tile.X, Tile.Y, wTile.X, wTile.Y);
+
+  If Not rs_OnMiniMap(wTile.X, wTile.Y) Then
+  Begin
+    Result := False;
+    Exit;
+  End;
+  Result := True;
+
+  MFNF(wTile.x, wTile.y, -1, -1);
+  t := getsystemtime;
+  FFlag(FlagD);
+  Result := (GetSystemTime - t) < 60000;
+End;
+
+Function ClosestTile(Path: TPointArray): Integer;
+
+Var
+   I: Integer;
+   p: TPoint;
+
+Begin
+  GetMyPos(p.X, p.Y);
+  Result := 0;
+  For I := 0 To High(Path) Do
+    If Distance(p.x, p.y, Path[I].X, Path[I].Y) < Distance(p.x, p.y, Path[Result].X, Path[Result].Y)  Then
+      Result := I;
+End;
+
+Function WalkNextStep(Path: TPointArray; Rand, FlagD: Integer): Boolean;
+
+Var
+   I: Integer;
+
+Begin
+  Result := False;
+  I := ClosestTile(Path);
+  If I = High(Path) Then
+    Exit;
+  If Not LoggedIn Then
+    Exit;
+  Result := True;
+  WalkTile(Path[I + 1], Rand, FlagD);
+  FindNormalRandoms;
+End;
+
+Function InsideEssenceAltar(Var Dist: Integer):Boolean;
+
+Var
+   P: TPoint;
+
+Begin
+  GetMyPos(P.X, P.Y);
+  Dist := Distance(P.X, P.Y, 2464, 4819);
+  Result := Dist < 20;
+End;
+
+Function BoatScreen: Boolean;
+
+Var
+   x, y: Integer;
+Begin
+  Result := FindColor(x, y, 2070783, MSX1, MSY1, MSX2, MSY2);
+End;
+
+Function UsePouches(Bank: Boolean): Boolean;
+
+Var
+   I: Integer;
+Begin
+  Case Players[CurrentPlayer].Strings[0] Of
+  'Large' :
+    Begin
+      Result := True;
+      For I := 1 To 3 Do
+      Begin
+        MouseItem(I, Bank);
+        Wait(50);
+        If Not Bank Then
+        Begin
+          ChooseOption('Empty');
+          Wait(50);
+        End;
+      End;
+    End;
+  End;
+End;
+
+//----------------------------------------------------------------------------//
+
+Function FindMonk: Boolean;
+
+Var
+   x, y, T: Integer;
+
+Begin
+  T := GetSystemTime;
+  While GetSystemTime - T < 120000 Do
+  Begin
+    x := mscx;
+    y := mscy;
+    If FindObjTPAMulti(x, y, 3367051, 9, 0, 25, 25, 10, ['alk-To','onk', 'nrana']) Then
+    Begin
+      Wait(50 * Slow);
+      Mouse(x, y, 0, 0, False);
+      Wait(50 * Slow);
+      ChooseOption('ake');
+      Wait(200 * Slow);
+      FFlag(0);
+      Wait(1000);
+    End;
+    T := GetSystemTime;
+    While Not BoatScreen And (GetSystemTime - t < 8000) Do
+      Wait(100);
+    If BoatScreen Then Break;
+  End;
+  T := GetSystemTime;
+  Result := BoatScreen;
+  While BoatScreen And (GetSystemTime - t < 20000) Do
+    Wait(100);
+End;
+
+Function FindItem(bmp, x1, y1, x2, y2: integer; Click: Boolean; Var S: String): boolean;
+
+Var
+   x, y, Tol, z: Integer;
+   B: Boolean;
+
+Begin
+  B := False;
+  z := GetColorToleranceSpeed;
+  ColorToleranceSpeed(1);
+  While Not B Do
+  Begin
+    B := FindBitmapToleranceIn(bmp, x, y, x1, y1, x2, y2, Tol)
+    Tol := Tol + 5;
+    If Tol > 60 Then
+      Break;
+  End;
+  If B Then
+  Begin
+    Wait(50 * Slow);
+    MMouse(x, y - 6, 2, 6);
+    Wait(200 * Slow);
+    S := rs_GetUpText;
+    GetMousePos(x, y);
+    Mouse(x, y, 0, 0, Click);
+    Result := True;
+  End;
+  ColorToleranceSpeed(z);
+End;
+
+Function UseGlory(Location: String): Boolean;
+
+Var
+   S: String;
+   T, x, y: Integer;
+
+Begin
+  Result := False;
+  GameTab(5);
+  Wait(500 * Slow);
+  If FindItem(Glory, MIX1, MIY1, MIX2, MIY2, False, S) Then
+  Begin
+    Try
+      GloryCharges := StrToInt(Between('(', ')', S));
+    Except
+      GloryCharges := -1;
+    End;
+    If Pos('(1)', s) <> 0 Then
+      ChangeGlory := True;
+    If GloryCharges = 1 Then
+      ChangeGlory := True;
+    If ChangeGlory Then
+      WriteLn('Glory will become empty, setting boolean');
+    Wait(50 * Slow);
+    ChooseOption('perate');
+    Wait(500 * Slow);
+    T := GetSystemTime;
+    While GetSystemTime - T < 8000 Do
+    Begin
+      If FindColorTolerance(x, y, 7238703, 20, 360, 90, 380, 20) Then
+        Break;
+      Wait(100 * Slow);
+    End;
+    If GetSystemTime - T >= 8000 Then
+      Exit;
+    Case Location Of
+      'Edgeville': Mouse(260, 390, 20, 6, True);
+      'Karamja': Mouse(260, 405, 20, 6, True);
+      'Draynor Village': Mouse(262, 420, 20, 4, True);
+      'Al Kharid': Mouse(226, 435, 20, 6, True);
+    End;
+    Result := True;
+    Wait(2500 * Slow);
+  End;
+End;
+
+function FindObjTPAMulti2(var x, y: integer; x1, y1, x2, y2, color, tol, cts, ObjWidth, ObjHeight, minCount :Integer; UpText: tstringarray): Boolean;
+var
+   I, j, tcts: Integer;
+   myPoint: TPoint;
+   Points: TPointArray;
+   aPoints: array of TPointArray;
+   s: string;
+begin
+  tcts := GetColorToleranceSpeed;
+  if not (cts >= 0) and (cts <= 2) then
+    cts := 1; // Standard.
+  ColorToleranceSpeed(cts);
+  FindColorsSpiralTolerance(x, y, Points, Color, x1, y1, x2, y2, Tol);
+  aPoints := TPAtoATPAEx(Points, ObjWidth, ObjHeight);
+  SetLength(Points, 0);
+  for I := 0 to Length(aPoints) - 1 do
+  begin
+    if Length(aPoints[I]) < minCount then
+      Continue;
+    myPoint := MiddleTPA(aPoints[I]);
+    MMouse(myPoint.X, myPoint.Y, 0, 0);
+    Wait(100 + Random(50));
+    ColorToleranceSpeed(1);
+    s := rs_getuptext;
+    for j := 0 to high(uptext) do
+      if pos(uptext[j], s) <> 0 then
+      begin
+        x := myPoint.X;
+        y := myPoint.Y;
+        Result := True;
+        ColorToleranceSpeed(tcts);
+        Exit;
+      end;
+    ColorToleranceSpeed(cts);
+  end;
+  ColorToleranceSpeed(tcts);
+end;
+
+Function Log: Boolean;
+
+Var
+   x, y, T, T2: Integer;
+
+Begin
+  T := GetSystemTime;
+  While GetSystemTime - T < 120000 Do
+  Begin
+    x := 270;
+    y := 85;
+    If FindObjTPAMulti2(x, y, x - 80, y - 80, x + 80, y + 80, 6062752, 9, 1, 5, 5, 1, ['ang', 'ross', 'lank']) Then
+    Begin
+      Mouse(x, y, 0, 0, True);
+      T2 := GetSystemTime;
+      While GetSystemTime - T2 < 10000 Do
+      Begin
+        Wait(100 * Slow);
+        If GetMyMoving Then
+          Continue;
+        If AtTile(Point(2834, 3335), 2) Then Break;
+      End;
+    End;
+    Result := AtTile(Point(2834, 3335), 2);
+    If Result Then Break;
+  End;
+  Wait(400 * Slow);
+  FTWait(3);
+End;
+
+Function LawAmount: Integer;
+
+Var
+   Air: TPoint;
+   S: String;
+
+Begin
+  If FindColor(Air.X, Air.Y, 65535, 530, 200, 730, 460) Then
+  Begin
+    Try
+      S := Trim(GetTextAtEx(Air.X-1, Air.Y-1, 0, StatChars, False, False, 0, 2, 65535, 10, False, tr_digits));
+      Result := StrToInt(S);
+      writeln(s);
+    Except
+      Result := -1;
+      Exit;
+    End;
+    Exit;
+  End;
+End;
+
+Function FindItem2(bmp, x1, y1, x2, y2, xoff, yoff: integer; Click: Boolean; Var S: String): boolean;
+
+Var
+   x, y, Tol, z: Integer;
+   B: Boolean;
+
+Begin
+  B := False;
+  z := GetColorToleranceSpeed;
+  ColorToleranceSpeed(1);
+  While Not B Do
+  Begin
+    B := FindBitmapToleranceIn(bmp, x, y, x1, y1, x2, y2, Tol)
+    Tol := Tol + 5;
+    If Tol > 60 Then
+      Break;
+  End;
+  If B Then
+  Begin
+    Wait(50 * Slow);
+    MMouse(x + xoff, y + yoff - 6, 8, 8);
+    Wait(200 * Slow);
+    S := rs_GetUpText;
+    GetMousePos(x, y);
+    Mouse(x, y, 0, 0, Click);
+    Result := True;
+  End;
+  ColorToleranceSpeed(z);
+End;
+
+//----------------------------------------------------------------------------//
+
+procedure Bank(DepositIt: Boolean);
+
+Var
+   S: String;
+   Law: Integer;
+
+begin
+  If Not LoggedIn Then Exit;
+  If Not BankScreen Then OpenBankFast('db');
+
+
+  If DepositIt Then
+  Begin
+    Law := LawAmount;
+    If Debug Then
+      WriteLn('Laws: ' + IntToStr(Law));
+    Laws := Laws + Law;
+    If ChangeGlory Then
+    Begin
+      FixBank;
+      FindItem(Glory, MSX1, MSY1, MSX2, MSY2, True, S);
+      Wait(400 * Slow);
+      CloseBank;
+      Wait(700 * Slow);
+      GameTab(4);
+      Wait(400 * Slow);
+      FindItem(Glory, MIX1, MIY1, MIX2, MIY2, True, S);
+      Wait(800 * Slow);
+      OpenBankFast('db');
+      FixBank;
+      ChangeGlory := False;
+    End;
+    If FindItem(LawRune, MIX1, MIY1, MIX2, MIY2, False, S) Then
+      ChooseOption('All');
+    Wait(400 * Slow);
+    Deposit(1, 28, 2);
+    Banks := Banks + 1;
+  End Else
+  Begin
+    FixBank;
+    If FindItem2(EssenceBMP, MSX1, MSY1, MSX2, MSY2, 8, 8, False, S) Then
+      ChooseOption('All');
+    Wait(400 * Slow);
+    CloseBank;
+    If Players[CurrentPlayer].Strings[0] <> '' Then
+    Begin
+      UsePouches(True);
+      OpenBankFast('db');
+      Wait(400 * Slow);
+      If FindItem(EssenceBMP, MSX1, MSY1, MSX2, MSY2, False, S) Then
+        ChooseOption('All');
+      CloseBank;
+    End;
+    Players[CurrentPlayer].Banked := Players[CurrentPlayer].Banked + 1;
+  End;
+end;
+
+//----------------------------------------------------------------------------//
+
+Function FindRuneAltar(Var P: TPoint): Boolean;
+
+Var
+   I: Integer;
+   
+Begin
+  If Not LoggedIn Then Exit;
+  For I := 0 To 4 Do
+  Begin
+    FindNormalRandoms;
+    P := Point(MSCX, MSCY - 60);
+    If FindObjTPAMulti(P.X, P.Y, 5002330, 20, 1, 20, 20, 50, ['ltar', 'raft', 'une']) Then
+    Begin
+      Result := True;
+      Exit;
+    End;
+  End;
+End;
+
+//----------------------------------------------------------------------------//
+
+Function CraftRunes: Boolean;
+
+Var
+  CraftMark: Integer;
+  D: TPoint;
+
+Begin
+  If Not LoggedIn Then Exit;
+  MarkTime(CraftMark);
+  Repeat
+    If TimeFromMark(CraftMark) > 20000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+    If FindRuneAltar(D) Then
+    Begin
+      Mouse(D.x, D.y, 0, 0, True);
+      FTWait(4);
+      FFlag(0);
+      FTWait(2);
+      FindNormalRandoms;
+    End;
+  Until (FindBitmapToleranceIn(LawRune, D.x, D.y, MIX1, MIY1, MIX2, MIY2, 40)) Or (InvCount < 4); // 4.. dunno why
+  Result := true;
+  Wait(1000);
+End;
+
+//----------------------------------------------------------------------------//
+
+Function EnterAltar: Boolean;
+
+Var
+   Dist, TimeMark, C, I, x, y: Integer;
+
+Begin
+  Wait(500+Random(501));
+  Repeat
+    Result := False;
+    C := C + 1;
+    For I := 0 To 5 Do
+    Begin
+      If InsideEssenceAltar(Dist) Then
+        Break;
+      x := mscx;
+      y := mscy;
+      If FindObjTPAMulti(x, y, 3158323, 20, 0, 50, 50, 800, ['uins', 'nter', 'yster']) Then
+      Begin
+        Mouse(x, y, 0, 0, True);
+        Wait(100 * Slow);
+        Break;
+      End;
+    End;
+    FFlag(0);
+    MarkTime(TimeMark);
+    repeat
+      FTWait(4);
+      If TimeFromMark(TimeMark) > 25000 Then Break;
+      FindNormalRandoms;
+      if not loggedin then exit;
+    until InsideEssenceAltar(Dist);
+    If InsideEssenceAltar(Dist) Then Result := True;
+  Until Result Or (C > 5);
+End;
+//----------------------------------------------------------------------------//
+
+Procedure ToAltar;
+var
+   Path: TPointArray;
+   t: LongInt;
+
+begin
+  Path := LoadPath('ToMonk');
+  T := GetSystemTime;
+  While WalkNextStep(Path, 3, 20) Do
+  Begin
+    Wait(50);
+    If GetSystemTime - T > 180000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+  End;
+  SetLength(Path, 0);
+  FFlag(0);
+  FTWait(5);
+  FindMonk;
+  
+  If Not Log Then
+  Begin
+    LogOut;
+    Exit;
+  End;
+
+  SetRun(True);
+  Path := LoadPath('LogToAltar');
+  T := GetSystemTime;
+  While WalkNextStep(Path, 2, 20) Do
+  Begin
+    Wait(50);
+    If GetSystemTime - T > 180000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+  End;
+  FTWait(5);
+  FFlag(0);
+  SetLength(Path, 0);
+  
+  If Not EnterAltar Then
+  begin
+    FFlag(0);
+    FTWait(6);
+    If Not EnterAltar Then Logout;
+  end;
+
+  Path := LoadPath('InsideAltar');
+  While WalkNextStep(Path, 1, 20) Do
+  Begin
+    Wait(50);
+    If GetSystemTime - T > 180000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+  End;
+  FTWait(1);
+  FFlag(0);
+end;
+
+Procedure ToBank;
+var
+   Path: TPointArray;
+   t: LongInt;
+
+Begin
+  Path := LoadPath('ToBank');
+  T := GetSystemTime;
+  While WalkNextStep(Path, 1, 20) Do
+  Begin
+    Wait(50);
+    If GetSystemTime - T > 180000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+  End;
+  FTWait(5);
+  FFlag(0);
+  SetLength(Path, 0);
+End;
+
+//----------------------------------------------------------------------------//
+
+procedure Setup;
+var I:Integer;
+begin
+  SetupSRL;
+  Fillmem;
+  SetUpRuneCrafting;
+  if MySRLID <> '' then
+  begin
+   SRLID       := MySRLID;
+   SRLPassword := MySRLPassword;
+  end;
+  for I := 0 to 19 do
+   ReportVars[I] := 0;
+  ReportVars[12] := 1;    // Sets Total times Run One Time each setup
+  RCMaster:=RemoteMaster;
+  RCLoc:=RemoteLocation;
+  SetUpSRLReport;
+  ClearDebug;
+  ClearReport;
+  DeclarePlayers;
+  LoginPlayer;
+end;
+
+//----------------------------------------------------------------------------//
+
+Procedure DoChats;
+
+Begin
+  SetChat('on',1);
+  SetChat('on',1);
+  SetChat('friends',2);
+  SetChat('friends',2);
+  SetChat('off',3);
+  SetChat('off',3);
+End;
+
+//----------------------------------------------------------------------------//
+
+Procedure PlayerStats;
+var Active: string;
+
+begin
+  writeln('**********************************************');
+  writeln('Name           : '+ Players[CurrentPlayer].Name);
+  writeln('Number         : '+inttostr(CurrentPlayer));
+  writeln('RC Level : '+ inttostr(Players[CurrentPlayer].level[7]));
+  PlayerCurTime:=(GetSystemTime div 1000);
+  writeln('Worked for     : '+IntToStr(Players[CurrentPlayer].Worked)+' minutes.');
+  writeln('Banked         : '+ inttostr(Players[CurrentPlayer].Banked) + ' times.');
+  if Players[CurrentPlayer].Active=True then Active:='True' else Active:='False';
+  writeln('Active         : '+ Active);
+  writeln('Location       : '+ Players[CurrentPlayer].loc);
+  writeln('**********************************************');
+end;
+
+//----------------------------------------------------------------------------//
+
+Procedure ProgressReport;
+Var
+  Rate, Sec: Integer;
+  i: Integer;
+  Active: string;
+
+begin
+  WriteLn(' ');
+  for i := 0 to HowManyPlayers-1 do
+  begin
+     if Players[i].Active=True then Active:='T' else Active:='F';
+        writeln( (inttostr(i))+' : '+Players[i].name+ ' = '+Active+'. RC: '+IntToStr(Players[i].Level[7])+
+        '. B :'+inttostr(Players[i].Banked)+' Times.'+
+        ' W : '+IntToStr(Players[i].Worked)+' Mins.'+
+        ' L : '+Players[CurrentPlayer].loc);
+  end
+  WriteLn(' ');
+  Sec:= GetTimeRunning div 1000+1;
+  Rate:= 3600*Laws/Sec;      // by mastaraymond.
+
+  WriteLn('<============== -'+VersionNumber+'- Progress Report ===============>');
+  WriteLn('Banked '+IntToStr(Banks)+' Times');
+  WriteLn('Crafted '+IntToStr(Laws) + ' Laws.');
+  WriteLn('Crafting '+IntToStr(Rate) + ' Laws per hour.');
+  WriteLn('Made ' + IntToStr(Round(Laws * 310.0)) + ' Geepees.');
+  WriteLn('Worked For '+TimeRunning);
+  WriteLn('<=====================================================>');
+  WriteLn(' ');
+  WriteLn(' ');
+
+  PlayerStats;
+
+  SRLRandomsReport;
+end;
+
+//----------------------------------------------------------------------------//
+Var
+   Count: Integer;
+   
+begin
+  smartsetup('ams5', false, false);
+  settargetdc(smartgetdc);
+  Setup;
+  SetAngle(True);
+  DoChats;
+  Repeat
+    Bank(False);
+    if Debug then writeln('ToAltar');
+    ToAltar;
+    If Not CraftRunes Then
+      LogOut;
+    If UsePouches(False) Then
+      CraftRunes;
+    For Count := 0 To 5 Do
+      If UseGlory('Draynor Village') Then
+        Break;
+    If Count >= 5 Then
+      LogOut;
+    ToBank;
+    Bank(True);
+    ProgressReport;
+
+    If (Players[CurrentPlayer].Banked Mod Loads = 0) And LoggedIn Then
+    Begin
+      MarkTime(MyMark);
+      Repeat
+        CloseBank;
+        If TimeFromMark(MyMark) > 60000 Then
+          TerminateScript;
+      Until Not Bankscreen;
+      LogOut;
+      NextPlayer(True);
+      GetAllLevels;
+      DoChats;
+    End;
+
+    If Not LoggedIn Then
+      Begin
+        NextPlayer(False);
+        GetAllLevels;
+        DoChats;
+      End;
+
+  Until False;
+end.

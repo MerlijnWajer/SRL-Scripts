@@ -1,0 +1,745 @@
+program New;
+
+{0 :  = T. RC: 0. B :27 Times. W : 0 Mins. L : Bank
+
+<============== -2.01- Progress Report ===============>
+Banked 27 Times
+Used up 756 Essence.
+Crafted 728 Natures.
+Crafting 332 Natures per hour.
+Made 189000 Geepees.
+Worked For 2 Hours, 11 Minutes and 10 Seconds
+<=====================================================>
+
+
+**********************************************
+Name           :
+Number         : 0
+RC Level : 0
+Worked for     : 0 minutes.
+Banked         : 27 times.
+Active         : True
+Location       : Bank
+**********************************************}
+
+{Banked 40 Times
+Used up 1092 Essence.
+Crafted 1092 Natures.
+Crafting 339 Natures per hour.
+Made 273000 Geepees.
+Worked For 3 Hours, 12 Minutes and 44 Seconds
+
+
+Banked 42 Times
+Used up 1148 Essence.
+Crafted 1120 Natures.
+Crafting 343 Natures per hour.
+Made 287000 Geepees.
+Worked For 3 Hours, 15 Minutes and 43 Seconds}
+
+{.include SRL/SRL/Misc/Smart.scar}
+{.include SRL/SRL.scar}
+{.Include SRL/SRL/Misc/FaladorColorFinder.scar}
+{.Include SRL/SRL/Skill/RuneCrafting.scar}
+
+Const
+  Slow = 1; // The higher slow is, the longer the waits.
+  Loads = 50;
+  Debug = True;
+  NumberOfUsers = 1;
+  StartPlayer = 0;
+  MySRLID             = '';   //<- your SRL ID (for stats) in here.
+  MySRLPassword       = ''; //<- your SRL PW (for stats) in here.
+  RemoteMaster        = ''; //<- fill in the Nickname of the RC master.
+  RemoteLocation      = 'Bank'; //<- fill in the Location of the RC slaves.
+
+Var
+   MyMark, Mark, EssUsed, Natures, RingCharges:Integer;
+   EssenceBMP, Ring: Integer;
+   ChangeRing: Boolean;
+
+//----------------------------------------------------------------------------//
+Const
+   VersionNumber       = '0.01';
+//---------------------------------------------------------------------------//
+
+
+Procedure DeclarePlayers;
+  Begin
+     HowManyPlayers  := NumberOfUsers;
+     NumberOfPlayers( HowManyPlayers );
+     CurrentPlayer := StartPlayer;
+
+     Players[0].Name :='';
+     Players[0].Pass :='';
+     Players[0].Nick :='';
+     Players[0].Loc :='Bank';
+     Players[0].Active:=True;
+
+End;
+
+Function LoadPath(PathType: String): TPointArray;
+
+Begin
+  Case PathType Of
+  'ToGlider':
+    Result := [Point(3269, 3166), Point(3276, 3174), Point(3281, 3185),
+               Point(3281, 3193), Point(3282, 3203), Point(3283, 3210)];
+
+  'ToLog':
+    Result := [Point(2971, 2969), Point(2962, 2977), Point(2951, 2979),
+                Point(2946, 2985), Point(2940, 2994), Point(2932, 3003),
+                Point(2930, 3014), Point(2921, 3022), Point(2919, 3032),
+                Point(2914, 3041), Point(2910, 3048)];
+  'LogToAltar':
+    Result := [Point(2906, 3049), Point(2901, 3052), Point(2895, 3044), Point(2885, 3041),
+               Point(2876, 3035), Point(2870, 3027), Point(2868, 3021)];
+  'ToBank':
+    Result := [Point(3314, 3235), Point(3308, 3234), Point(3299, 3228),
+               Point(3295, 3219), Point(3289, 3210), Point(3281, 3203),
+               Point(3281, 3194), Point(3282, 3185), Point(3278, 3174),
+               Point(3276, 3167), Point(3269, 3165)];
+  End;
+End;
+
+Procedure FillMem;
+begin
+  EssenceBMP := BitmapFromString(22, 1, 'beNqbMb00N7c8Px+Iqgo' +
+       'La4qL60pLG8rLmyorW6qr2mprOurruhoaepqaelua+9taJ7a3T+7s' +
+       'nNrdNb23Z2Zf35xJExcDADhTIas=');
+  Ring := BitmapFromString(13, 4, 'beNpjYHx1Tn7fcsmmYkEGBkZMd' +
+       'GSN1JIJYr01Qt9uKgJVntksvWqa2LxuUSBa2IuOksJ4f9/V+nhF4c' +
+       'UZ+XuHZYGKty2QgKMNs8WXTxYrzxSwMGQHmvzjtuL7SwpPT8kBVV7' +
+       'ZJQNUfHCV5M5FEmtniLeVCXk5cjIAAPbyPVM=');
+end;
+
+//----------------------------------------------------------------------------//
+
+Function AtTile(Tile: TPoint; Dist: Integer): Boolean;
+
+Var
+   P: TPoint;
+Begin
+  GetMyPos(P.X, P.Y);
+  Result := Distance(P.X, P.Y, Tile.X, Tile.Y) <= Dist;
+End;
+
+Function WalkTile(Tile: TPoint; Randomness, FlagD: Integer): Boolean;
+
+Var
+   wTile: TPoint;
+   t: Integer;
+
+Begin
+  TileToMiniMap(Tile.X, Tile.Y, wTile.X, wTile.Y);
+
+  If Not rs_OnMiniMap(wTile.X, wTile.Y) Then
+  Begin
+    Result := False;
+    Exit;
+  End;
+  Result := True;
+
+  MFNF(wTile.x, wTile.y, -1, -1);
+  t := getsystemtime;
+  FFlag(FlagD);
+  Result := (GetSystemTime - t) < 60000;
+End;
+
+Function ClosestTile(Path: TPointArray): Integer;
+
+Var
+   I: Integer;
+   p: TPoint;
+
+Begin
+  GetMyPos(p.X, p.Y);
+  Result := 0;
+  For I := 0 To High(Path) Do
+    If Distance(p.x, p.y, Path[I].X, Path[I].Y) < Distance(p.x, p.y, Path[Result].X, Path[Result].Y)  Then
+      Result := I;
+End;
+
+Function WalkNextStep(Path: TPointArray; Rand, FlagD: Integer): Boolean;
+
+Var
+   I: Integer;
+
+Begin
+  Result := False;
+  I := ClosestTile(Path);
+  If I = High(Path) Then
+    Exit;
+  If Not LoggedIn Then
+    Exit;
+  Result := True;
+  WalkTile(Path[I + 1], Rand, FlagD);
+  FindNormalRandoms;
+End;
+
+Function InsideEssenceAltar(Var Dist: Integer):Boolean;
+
+Var
+   P: TPoint;
+
+Begin
+  GetMyPos(P.X, P.Y);
+  Dist := Distance(P.X, P.Y, 2400, 4835);
+  Result := Dist < 20;
+End;
+
+Function GlideScreen: Boolean;
+
+Var
+   x, y: Integer;
+Begin
+  Result := FindColor(x, y, 39423, MSX1, MSY1, MSX2, MSY2);
+End;
+
+//----------------------------------------------------------------------------//
+
+Function FindGlider: Boolean;
+
+Var
+   x, y, T: Integer;
+
+Begin
+  T := GetSystemTime;
+  While GetSystemTime - T < 120000 Do
+  Begin
+    x := mscx - 20;
+    y := mscy;             // voor de 2e betere kleur
+    If FindObjTPAMulti(x, y, 2439503, 9, 1, 10, 10, 4, ['alk-To','aptain']) Then
+    Begin
+      Wait(50 * Slow);
+      Mouse(x, y, 0, 0, False);
+      Wait(50 * Slow);
+      ChooseOption('lider');
+      Wait(200 * Slow);
+      FFlag(0);
+      Wait(2000);
+    End;
+    If GlideScreen Then Break;
+  End;
+  Result := GlideScreen;
+End;
+
+//----------------------------------------------------------------------------//
+
+Function Glide(Location: String): Boolean;
+
+Var
+   Coord: TPoint;
+   t: Integer;
+
+Begin
+  Case Location Of
+    'Ta Quir Priw': Coord := Point(90, 75);
+    'Sindarpos': Coord := Point(275, 60);
+    'Lemntolly Undri': Coord := Point(90, 265);
+    'Gandius': Coord := Point(245, 260);
+    'Lemanto Andra': Coord := Point(430, 70);
+    'Kar-Hewo': Coord := Point(445, 180);
+  End;
+  Mouse(Coord.X, Coord.Y, 25, 25, True);
+  t := GetSystemTime;
+  While GlideScreen And (GetSystemTime - t < 20000) Do
+    Wait(100);
+  If GlideScreen Then
+    Mouse(Coord.X, Coord.Y, 25, 25, True);
+  t := GetSystemTime;
+  While GlideScreen And (GetSystemTime - t < 20000) Do
+    Wait(100);
+  Result := Not GlideScreen;
+End;
+
+Function FindItem(bmp, x1, y1, x2, y2: integer; Click: Boolean; Var S: String): boolean;
+
+Var
+   x, y, Tol, z: Integer;
+   B: Boolean;
+
+Begin
+  B := False;
+  z := GetColorToleranceSpeed;
+  ColorToleranceSpeed(1);
+  While Not B Do
+  Begin
+    B := FindBitmapToleranceIn(bmp, x, y, x1, y1, x2, y2, Tol)
+    Tol := Tol + 5;
+    If Tol > 60 Then
+      Break;
+  End;
+  If B Then
+  Begin
+    Wait(50 * Slow);
+    MMouse(x, y - 6, 2, 6);
+    Wait(200 * Slow);
+    S := rs_GetUpText;
+    GetMousePos(x, y);
+    Mouse(x, y, 0, 0, Click);
+    Result := True;
+  End;
+  ColorToleranceSpeed(z);
+End;
+
+Function DuelRing(Location: String): Boolean;
+
+Var
+   S: String;
+   T, x, y: Integer;
+
+Begin
+  Result := False;
+  GameTab(5);
+  Wait(500 * Slow);
+  If FindItem(Ring, MIX1, MIY1, MIX2, MIY2, False, S) Then
+  Begin
+    Try
+      RingCharges := StrToInt(Between('(', ')', S));
+    Except
+      RingCharges := -1;
+    End;
+    If Pos('(1)', s) <> 0 Then
+      ChangeRing := True;
+    If RingCharges = 1 Then
+      ChangeRing := True;
+    If ChangeRing Then
+      WriteLn('Ring will crumble, setting boolean');
+    Wait(50 * Slow);
+    ChooseOption('perate');
+    Wait(500 * Slow);
+    T := GetSystemTime;
+    While GetSystemTime - T < 8000 Do
+    Begin
+      If FindColorTolerance(x, y, 7238703, 20, 360, 90, 380, 20) Then
+        Break;
+      Wait(100 * Slow);
+    End;
+    If GetSystemTime - T >= 8000 Then
+      Exit;
+    Case Location Of
+      'Al Kharid': Mouse(260, 395, 20, 6, True);
+      'Castle Wars': Mouse(250, 420, 20, 6, True);
+    End;
+    Result := True;
+    Wait(4000 * Slow / 2);
+  End;
+End;
+
+Function Log: Boolean;
+
+Var
+   x, y, T, T2: Integer;
+
+Begin
+  T := GetSystemTime;
+  While GetSystemTime - T < 120000 Do
+  Begin
+    x := mscx;
+    y := mscy;
+    If FindObjTPAMulti(x, y, 734292, 9, 1, 5, 5, 1, ['ross', 'oode', 'log']) Then
+    Begin
+      Mouse(x, y, 0, 0, True);
+      T2 := GetSystemTime;
+      While GetSystemTime - T2 < 10000 Do
+      Begin
+        Wait(100 * Slow);
+        If GetMyMoving Then
+          Continue;
+        If AtTile(Point(2906, 3049), 2) Or AtTile(Point(2903, 3057), 2) Then
+          Break;
+      End;
+    End;
+    Result := AtTile(Point(2906, 3049), 2) Or AtTile(Point(2903, 3057), 2);
+    If Result Then Break;
+  End;
+  Wait(400 * Slow);
+  If AtTile(Point(2903, 3057), 3) Then
+  Begin
+    Wait(1000 * Slow);
+    WalkTile(Point(2906, 3049), 0, 0);
+  End;
+  FTWait(3);
+End;
+
+Function NatureAmount: Integer;
+
+Var
+   Air: TPoint;
+   S: String;
+
+Begin
+  If FindColor(Air.X, Air.Y, 65535, 530, 200, 730, 460) Then
+  Begin
+    Try
+      S := Trim(GetTextAtEx(Air.X-1, Air.Y-1, 0, StatChars, False, False, 0, 2, 65535, 10, False, tr_digits));
+      Result := StrToInt(S);
+      writeln(s);
+    Except
+      Result := -1;
+      Exit;
+    End;
+    Exit;
+  End;
+End;
+
+//----------------------------------------------------------------------------//
+
+procedure Bank;
+
+Var
+   S: String;
+   Nats: Integer;
+
+begin
+  If Not LoggedIn Then Exit;
+  OpenBankFast('akb');
+  FixBank;
+  Nats := NatureAmount;
+  If Debug Then
+    WriteLn('Natures: ' + IntToStr(Nats));
+  Natures := Natures + Nats;
+  If ChangeRing Then
+  Begin
+    FindItem(Ring, MSX1, MSY1, MSX2, MSY2, True, S);
+    Wait(400 * Slow);
+    CloseBank;
+    Wait(700 * Slow);
+    GameTab(4);
+    Wait(400 * Slow);
+    FindItem(Ring, MIX1, MIY1, MIX2, MIY2, True, S);
+    Wait(800 * Slow);
+    OpenBankFast('akb');
+    FixBank;
+    ChangeRing := False;
+  End;
+  If FindItem(NatureRune, MIX1, MIY1, MIX2, MIY2, False, S) Then
+    ChooseOption('All');
+  Wait(400 * Slow);
+  Deposit(1, 28, 2);
+  If FindItem(EssenceBMP, MSX1, MSY1, MSX2, MSY2, False, S) Then
+    ChooseOption('All');
+  Wait(400 * Slow);
+  CloseBank;
+  Players[CurrentPlayer].Banked := Players[CurrentPlayer].Banked + 1;
+  Banks := Banks + 1;
+end;
+
+//----------------------------------------------------------------------------//
+
+Function FindRuneAltar(Var P: TPoint): Boolean;
+
+var
+   i:integer;
+Begin
+  If Not LoggedIn Then Exit;
+  For I := 0 To 4 Do
+  Begin
+    FindNormalRandoms;
+    P := Point(265, 25);
+    If FindObjTPA(P.X, P.Y, 5002330, 20, 1, 20, 20, 50, 'ltar') Then
+    Begin
+      Result := True;
+      Exit;
+    End;
+  End;
+End;
+
+//----------------------------------------------------------------------------//
+
+Function CraftRunes: Boolean;
+
+Var
+  CraftMark: Integer;
+  D: TPoint;
+
+Begin
+  If Not LoggedIn Then Exit;
+  MarkTime(CraftMark);
+  Repeat
+    If TimeFromMark(CraftMark) > 20000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+    If FindRuneAltar(D) Then
+    Begin
+      Mouse(D.x, D.y, 0, 0, True);
+      FTWait(4);
+      FFlag(0);
+      FTWait(2);
+      FindNormalRandoms;
+    End;
+  Until (FindBitmapToleranceIn(NatureRune, D.x, D.y, MIX1, MIY1, MIX2, MIY2, 40)) Or (InvCount < 4); // 4.. dunno why
+  Result := true;
+  Wait(1000);
+End;
+
+//----------------------------------------------------------------------------//
+
+Function EnterAltar: Boolean;
+
+Var
+   Dist, TimeMark, C, I, x, y: Integer;
+
+Begin
+  Wait(500+Random(501));
+  Repeat
+    Result := False;
+    C := C + 1;
+    For I := 0 To 5 Do
+    Begin
+      x := mscx;
+      y := mscy;
+      If FindObjTPAMulti(x, y, 3158323, 20, 0, 50, 50, 800, ['uins', 'nter', 'yster']) Then
+      Begin
+        Mouse(x, y, 0, 0, True);
+        Wait(100 * Slow);
+        Break;
+      End;
+    End;
+    FFlag(0);
+    MarkTime(TimeMark);
+    repeat
+      FTWait(4);
+      If TimeFromMark(TimeMark) > 25000 Then Break;
+      FindNormalRandoms;
+      if not loggedin then exit;
+    until InsideEssenceAltar(Dist);
+    If InsideEssenceAltar(Dist) Then Result := True;
+  Until Result Or (C > 5);
+End;
+//----------------------------------------------------------------------------//
+
+Procedure ToAltar;
+var
+   Path: TPointArray;
+   t: LongInt;
+
+begin
+  Path := LoadPath('ToGlider');
+  T := GetSystemTime;
+  While WalkNextStep(Path, 3, 10) Do
+  Begin
+    Wait(50);
+    If GetSystemTime - T > 180000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+  End;
+  FTWait(5);
+  FFlag(0);
+  SetLength(Path, 0);
+  If FindGlider Then Glide('Ta Quir Priw');
+  Wait(4000 * Slow / 2);
+  If FindGlider Then Glide('Gandius');
+  Wait(4000 * Slow / 2);
+  Path := LoadPath('ToLog');
+  T := GetSystemTime;
+  While WalkNextStep(Path, 3, 10) Do
+  Begin
+    Wait(50);
+    If GetSystemTime - T > 180000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+  End;
+  FTWait(5);
+  FFlag(0);
+  SetLength(Path, 0);
+  If Not Log Then
+  Begin
+    LogOut;
+    Exit;
+  End;
+  Path := LoadPath('LogToAltar');
+  T := GetSystemTime;
+  While WalkNextStep(Path, 3, 10) Do
+  Begin
+    Wait(50);
+    If GetSystemTime - T > 180000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+  End;
+  FTWait(5);
+  FFlag(0);
+  SetLength(Path, 0);
+end;
+
+Procedure ToBank;
+var
+   Path: TPointArray;
+   t: LongInt;
+
+Begin
+  Path := LoadPath('ToBank');
+  T := GetSystemTime;
+  While WalkNextStep(Path, 3, 10) Do
+  Begin
+    Wait(50);
+    If GetSystemTime - T > 180000 Then
+    Begin
+      LogOut;
+      Exit;
+    End;
+  End;
+  FTWait(5);
+  FFlag(0);
+  SetLength(Path, 0);
+End;
+
+//----------------------------------------------------------------------------//
+
+procedure Setup;
+var I:Integer;
+begin
+  SetupSRL;
+  Fillmem;
+  SetUpRuneCrafting;
+  if MySRLID <> '' then
+  begin
+   SRLID       := MySRLID;
+   SRLPassword := MySRLPassword;
+  end;
+  for I := 0 to 19 do
+   ReportVars[I] := 0;
+  ReportVars[12] := 1;    // Sets Total times Run One Time each setup
+  RCMaster:=RemoteMaster;
+  RCLoc:=RemoteLocation;
+  SetUpSRLReport;
+  ClearDebug;
+  ClearReport;
+  DeclarePlayers;
+  LoginPlayer;
+  SetScreenName(Players[CurrentPlayer].Nick);
+end;
+
+//----------------------------------------------------------------------------//
+
+Procedure DoChats;
+
+Begin
+  SetChat('on',1);
+  SetChat('on',1);
+  SetChat('friends',2);
+  SetChat('friends',2);
+  SetChat('off',3);
+  SetChat('off',3);
+End;
+
+//----------------------------------------------------------------------------//
+
+Procedure PlayerStats;
+var Active: string;
+
+begin
+  writeln('**********************************************');
+  writeln('Name           : '+ Players[CurrentPlayer].Name);
+  writeln('Number         : '+inttostr(CurrentPlayer));
+  writeln('RC Level : '+ inttostr(Players[CurrentPlayer].level[7]));
+  PlayerCurTime:=(GetSystemTime div 1000);
+  writeln('Worked for     : '+IntToStr(Players[CurrentPlayer].Worked)+' minutes.');
+  writeln('Banked         : '+ inttostr(Players[CurrentPlayer].Banked) + ' times.');
+  if Players[CurrentPlayer].Active=True then Active:='True' else Active:='False';
+  writeln('Active         : '+ Active);
+  writeln('Location       : '+ Players[CurrentPlayer].loc);
+  writeln('**********************************************');
+end;
+
+//----------------------------------------------------------------------------//
+
+Procedure ProgressReport;
+Var
+  Rate, Sec: Integer;
+  i: Integer;
+  Active: string;
+
+begin
+  WriteLn(' ');
+  for i := 0 to HowManyPlayers-1 do
+  begin
+     if Players[i].Active=True then Active:='T' else Active:='F';
+        writeln( (inttostr(i))+' : '+Players[i].name+ ' = '+Active+'. RC: '+IntToStr(Players[i].Level[7])+
+        '. B :'+inttostr(Players[i].Banked)+' Times.'+
+        ' W : '+IntToStr(Players[i].Worked)+' Mins.'+
+        ' L : '+Players[CurrentPlayer].loc);
+  end
+  WriteLn(' ');
+  Sec:= GetTimeRunning div 1000+1;
+  Rate:= 3600*Natures/Sec;      // by mastaraymond.
+
+  WriteLn('<============== -'+VersionNumber+'- Progress Report ===============>');
+  WriteLn('Banked '+IntToStr(Banks)+' Times');
+  WriteLn('Used up '+IntToStr(EssUsed) + ' Essence.');
+  WriteLn('Crafted '+IntToStr(Natures) + ' Natures.');
+  WriteLn('Crafting '+IntToStr(Rate) + ' Natures per hour.');
+  WriteLn('Made ' + IntToStr(Round(EssUsed * 250.0)) + ' Geepees.');
+  WriteLn('Worked For '+TimeRunning);
+  WriteLn('<=====================================================>');
+  WriteLn(' ');
+  WriteLn(' ');
+
+  PlayerStats;
+
+  SRLRandomsReport;
+end;
+
+//----------------------------------------------------------------------------//
+Var
+   Count: Integer;
+
+begin
+  smartsetup('ams5', false, false);
+  settargetdc(smartgetdc);
+  Setup;
+  HighestAngle;
+  DoChats;
+  Repeat
+    Bank;
+    ProgressReport;
+    if Debug then writeln('ToAltar');
+    ToAltar;
+    if Debug then writeln('EnterAltar');
+    If Not EnterAltar Then
+    begin
+      FFlag(0);
+      FTWait(6);
+      If Not EnterAltar Then Logout;
+    end;
+    If Not CraftRunes Then
+      LogOut;
+    EssUsed := EssUsed + 28;
+    For Count := 0 To 5 Do
+      If DuelRing('Al Kharid') Then
+        Break;
+    ToBank;
+
+    If (Players[CurrentPlayer].Banked Mod Loads = 0) And LoggedIn Then
+    Begin
+      MarkTime(MyMark);
+      Repeat
+        CloseBank;
+        If TimeFromMark(MyMark) > 60000 Then
+          TerminateScript;
+      Until Not Bankscreen;
+      LogOut;
+      NextPlayer(True);
+      GetAllLevels;
+      DoChats;
+    End;
+
+    If Not LoggedIn Then
+      Begin
+        NextPlayer(False);
+        GetAllLevels;
+        DoChats;
+      End;
+
+  Until False;
+end.
+
